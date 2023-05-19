@@ -25,18 +25,19 @@ from pytorch3d.structures import Meshes
 from scipy.spatial.transform import Rotation
 from yacs.config import CfgNode
 
+# DONE (zijiao): use config file rather than hard-coded parameters
 # setting up the correct meta parameters
-MESH_DIR = "/mnt/sw/vln/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
-VFOV = 60
-WIDTH = 640
-HEIGHT = 480
-FOV = VFOV * WIDTH / HEIGHT
+# MESH_DIR = "/mnt/sw/vln/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
+# VFOV = 60
+# WIDTH = 640
+# HEIGHT = 480
+# FOV = VFOV * WIDTH / HEIGHT
 # HEADINGS = [np.deg2rad(30.0 * h) for h in range(12)]
 # ELEVATIONS = [np.deg2rad(e) for e in [-30.0, 0, 30]]
 
 # aspect_ratio = 1  # pixel aspect
 # image_aspect_ratio = 4 / 3  # image aspect
-image_size = (WIDTH, HEIGHT)
+# image_size = (WIDTH, HEIGHT)
 
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
@@ -163,14 +164,14 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     return eye.tolist(), rotated_at.tolist(), rotated_up_vector.tolist()
 
 
-def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, Meshes]:
+def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, Tuple]:
     """load meshes from scan ids
 
     Args:
         scan_ids (List of str): list of scan ids
 
     Returns:
-        Dict[str, Meshes]: dictionary of scan id to Meshes
+        Meshes: Meshes object (batched meshes)
     """
     device = kwargs.get("device", "cpu")
     texture_atlas_size = kwargs.get("texture_atlas_size", 30)
@@ -190,10 +191,14 @@ def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, 
             atlas = atlas.unsqueeze(0)
         textures = TexturesAtlas(atlas=atlas)
 
-        mesh = Meshes(verts=[verts], faces=[faces.verts_idx], textures=textures)
-        mesh = mesh.to(device)
-        mesh_dict[scan] = mesh
-
+        # TODO explore padding to potentially speed up
+        # meshes = Meshes(verts=n_verts, faces=n_face_verts_idx, textures=n_textures)
+        # meshes = meshes.to(device)
+        mesh_dict[scan] = (
+            verts,
+            faces.verts_idx,
+            textures,
+        )
     return mesh_dict
 
 
@@ -213,8 +218,9 @@ def get_viewpoint_info(
     }
 
 
+# TODO join function into classes
 # visualize mesh texture atlas
-def visualize_texture_atlas(atlas: Dict[str, Any]) -> None:
+def visualize_texture_atlas(atlas: Dict[str, Any], save_dir: str) -> None:
     # Convert the atlas to a NumPy array and remove the batch dimension
     atlas_np = atlas.cpu().numpy().squeeze(0)
 
@@ -240,7 +246,10 @@ def visualize_texture_atlas(atlas: Dict[str, Any]) -> None:
     plt.figure(figsize=(10, 10))
     plt.imshow(atlas_image)
     plt.axis("off")
-    plt.show()
+    if save_dir:
+        plt.imsave(save_dir + "/atlas.png", atlas_image)
+    else:
+        plt.show()
 
 
 # create a rendering at given viewpoint within a mesh, and heading elevation
@@ -250,7 +259,7 @@ def init_episode(
     elevation: float,
     cfg: CfgNode,
     mesh: Optional[Meshes] = None,
-    **kwargs: Dict[str, Any],
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     # load mesh
     # initialize the camera

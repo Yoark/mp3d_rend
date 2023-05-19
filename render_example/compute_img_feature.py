@@ -2,7 +2,7 @@
 # it is modified from "https://raw.githubusercontent.com/cshizhe/VLN-HAMT/main/preprocess/precompute_img_features_vit.py"
 
 #!/usr/bin/env python3
-
+# TODO convert this to pytorch3d compatible
 """ Script to precompute image features using a Pytorch ResNet CNN, using 36 discretized views
     at each viewpoint in 30 degree increments, and the provided camera WIDTH, HEIGHT 
     and VFOV parameters. """

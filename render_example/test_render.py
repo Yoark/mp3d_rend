@@ -22,6 +22,7 @@ from render.render import (
 )
 
 
+# DONE use config file to set up the parameters
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -42,16 +43,16 @@ def main():
     cfg.merge_from_file("render_example/configs/test.yaml")
     cfg.freeze()
     # setting up the correct meta parameters
-    MESH_DIR = "/mnt/sw/vln/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
-    VFOV = 60
-    WIDTH = 640
-    HEIGHT = 480
-    FOV = VFOV * WIDTH / HEIGHT
-    HEADINGS = [np.deg2rad(30.0 * h) for h in range(12)]
-    ELEVATIONS = [np.deg2rad(e) for e in [-30.0, 0, 30]]
-    pixel_aspect_ratio = 1  # pixel aspect
-    image_aspect_ratio = 4 / 3  # image aspect
-    image_size = (WIDTH, HEIGHT)
+    # MESH_DIR = "/mnt/sw/vln/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
+    # VFOV = 60
+    # WIDTH = 640
+    # HEIGHT = 480
+    # FOV = VFOV * WIDTH / HEIGHT
+    # HEADINGS = [np.deg2rad(30.0 * h) for h in range(12)]
+    # ELEVATIONS = [np.deg2rad(e) for e in [-30.0, 0, 30]]
+    # pixel_aspect_ratio = 1  # pixel aspect
+    # image_aspect_ratio = 4 / 3  # image aspect
+    # image_size = (WIDTH, HEIGHT)
 
     # set devic
     if torch.cuda.is_available():
@@ -92,6 +93,7 @@ def main():
         init_heading,
         init_elevation,
         raster_settings=raster_settings,
+        cfg=cfg,
     )
     # test rendering
     if args.render_type == "image":
@@ -114,8 +116,8 @@ def main():
         up_init = renderer_dict["up"]
         at_init = renderer_dict["at"]
 
-        for e, elevation in enumerate(ELEVATIONS):
-            for h, heading in enumerate(HEADINGS):
+        for e, elevation in enumerate(cfg.MP3D.ELEVATIONS):
+            for h, heading in enumerate(cfg.MP3D.HEADINGS):
                 eye, at, up = rotate_heading_elevation(
                     eye_init, at_init, up_init, heading, elevation
                 )

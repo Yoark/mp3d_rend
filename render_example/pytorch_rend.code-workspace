@@ -8,6 +8,8 @@
 		}
 	],
 	"settings": {
-		"liveServer.settings.multiRootWorkspaceName": "pytorch_rend"
+		"liveServer.settings.multiRootWorkspaceName": "pytorch_rend",
+		"todo-tree.tree.showBadges": true,
+		"todo-tree.tree.showCountsInTree": true
 	}
 }
