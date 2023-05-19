@@ -1,0 +1,3 @@
+# poplulate a .gitignore file by ignore render_example/rendered_sampled, 
+render_example/rendered_sampled/
+**/**/*.png
