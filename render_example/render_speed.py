@@ -17,6 +17,7 @@ from pytorch3d.renderer import (
 )
 from pytorch3d.structures import Meshes
 from pytorch3d.structures.meshes import join_meshes_as_batch
+from torch.profiler import ProfilerActivity, profile, record_function
 
 from render.config import cfg
 from render.render import get_device, load_meshes, load_viewpoints_dict
@@ -33,8 +34,9 @@ def main():
 
     # select 10 random scans and select 5 random viewpoints from each to render
     NUM_SCAN = 1
-    NUM_VIEWPOINTS = 10
+    NUM_VIEWPOINTS = 1
     scans = scans[:NUM_SCAN]
+    print(scans)
     scan_viewpoint_pairs = []
     for scan in scans:
         # select 5 random scans
@@ -161,5 +163,13 @@ def main():
 
 
 if __name__ == "__main__":
-    with launch_ipdb_on_exception():
-        main()
+    # profile memory use, use tensorboard to visualize
+    with profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        record_shapes=True,
+        profile_memory=True,
+        on_trace_ready=torch.profiler.tensorboard_trace_handler("temp"),
+        with_stack=True,
+    ) as prof:
+        with record_function("main"):
+            main()
