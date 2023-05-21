@@ -3,3 +3,4 @@ render_example/rendered_sampled/
 **/**/*.png
 temp/*
 __pycache__/
+*.code-workspace
