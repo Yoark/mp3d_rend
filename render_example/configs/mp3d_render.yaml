@@ -1,0 +1,6 @@
+RENDER:
+  IMAGE_MODEL_NAME: vit_base_patch16_224
+TEST: True
+SAVE:
+  IMAGE_DIR: render_example/save/images
+  VAL_UNSEEN_POSE: render_example/save/poses
