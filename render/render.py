@@ -18,6 +18,7 @@ from pytorch3d.renderer import (
 from pytorch3d.renderer.mesh.textures import TexturesAtlas
 from pytorch3d.structures import Meshes
 from scipy.spatial.transform import Rotation
+from sympy import Union
 from yacs.config import CfgNode
 
 from render.utils import get_obj_paths
@@ -175,7 +176,7 @@ def init_episode(
     heading: float,
     elevation: float,
     cfg: CfgNode,
-    mesh: Optional[Tuple] = None,
+    mesh: Optional[Any],
     K=None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
@@ -240,6 +241,7 @@ def init_episode(
         "up": up,
         "camera": camera,
         "light": ambient,
+        "mesh": mesh,
     }
 
 
