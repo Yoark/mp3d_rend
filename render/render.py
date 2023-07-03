@@ -126,9 +126,9 @@ def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, 
         # meshes = Meshes(verts=n_verts, faces=n_face_verts_idx, textures=n_textures)
         # meshes = meshes.to(device)
         mesh_dict[scan] = (
-            verts,
-            faces.verts_idx,
-            textures,
+            verts.to(device),
+            faces.verts_idx.to(device),
+            textures.to(device),
         )
     return mesh_dict
 
