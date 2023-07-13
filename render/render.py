@@ -210,16 +210,15 @@ def init_episode(
     )
 
     # use ambient lighting
-    ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    # ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    light = kwargs.get(
+        "light", AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    )
     # point_light = PointLights(location=eye_r, device=device)
 
     renderer = MeshRenderer(
         rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
-        shader=SoftPhongShader(
-            device=device,
-            cameras=camera,
-            # lights=lights
-        ),
+        shader=SoftPhongShader(device=device, cameras=camera, lights=light),
     )
     if mesh:
         if isinstance(mesh, tuple):
@@ -229,7 +228,7 @@ def init_episode(
                 faces=[faces.to(device)],
                 textures=textures.to(device),
             )
-        images = renderer(mesh, cameras=camera, lights=ambient)
+        images = renderer(mesh, cameras=camera, lights=light)
         #! This does not work images = renderer(mesh, cameras=cameras, lights=point_light)
         plt.figure(figsize=(8, 6))
         plt.imshow(images[0, ..., :3].cpu().numpy())
@@ -240,7 +239,7 @@ def init_episode(
         "at": at,
         "up": up,
         "camera": camera,
-        "light": ambient,
+        "light": light,
         "mesh": mesh,
     }
 
