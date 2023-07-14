@@ -80,6 +80,8 @@ for scan, vp in pbar:
         image_path = os.path.join(
             scan_folder, f"{scan}_{vp}_{state.heading}_{state.elevation}.png"
         )
+        #! normalize and convert to tensor input for feature extractor
+
         image.save(image_path)
 
         scan_vp_cam_poses.append(

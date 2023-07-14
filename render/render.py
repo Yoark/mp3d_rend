@@ -95,7 +95,9 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     return eye.tolist(), rotated_at.tolist(), rotated_up_vector.tolist()
 
 
-def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, Tuple]:
+def load_meshes(
+    scan_ids: List[str], mesh_dir: str, with_atlas: bool = True, **kwargs: Any
+) -> Dict[str, Tuple]:
     """load meshes from scan ids
 
     Args:
@@ -117,19 +119,23 @@ def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, 
             texture_wrap="repeat",
             texture_atlas_size=texture_atlas_size,
         )
-        atlas = aux.texture_atlas
-        if atlas.ndim == 4:
-            atlas = atlas.unsqueeze(0)
-        textures = TexturesAtlas(atlas=atlas)
+        if with_atlas:
+            atlas = aux.texture_atlas
+            if atlas.ndim == 4:
+                atlas = atlas.unsqueeze(0)
+            textures = TexturesAtlas(atlas=atlas)
+            mesh_dict[scan] = (
+                verts.to(device),
+                faces.verts_idx.to(device),
+                textures.to(device),
+            )
+        else:
+            mesh_dict[scan] = (verts.to(device), faces.verts_idx.to(device), aux)
 
         # TODO explore padding to potentially speed up
         # meshes = Meshes(verts=n_verts, faces=n_face_verts_idx, textures=n_textures)
         # meshes = meshes.to(device)
-        mesh_dict[scan] = (
-            verts.to(device),
-            faces.verts_idx.to(device),
-            textures.to(device),
-        )
+
     return mesh_dict
 
 
@@ -241,6 +247,63 @@ def init_episode(
         "camera": camera,
         "light": light,
         "mesh": mesh,
+    }
+
+
+def get_render_params(
+    viewpoint_data: dict,
+    heading: float,
+    elevation: float,
+    cfg: CfgNode,
+    K=None,
+    require_grad=False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    # load mesh
+    # initialize the camera
+    raster_settings = kwargs.get(
+        "raster_settings",  # render settings
+        RasterizationSettings(
+            image_size=(cfg.RENDER.IMAGE_SIZE),
+            blur_radius=0.0,
+            faces_per_pixel=1,
+        ),
+    )
+    device = kwargs.get("device", "cpu")
+    pose = viewpoint_data["pose"]
+    eye = [pose[3], pose[7], pose[11]]  # location
+    at = [eye[0], eye[1] + 1, eye[2]]
+    up = [0, 0, 1]
+    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
+    # init camera
+    R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
+    R = R.requires_grad_(require_grad)
+    T = T.requires_grad_(require_grad)
+    camera = FoVPerspectiveCameras(
+        device=device,
+        # zfar=500,
+        # znear=20,
+        R=R,
+        T=T,
+        # K=K,
+        aspect_ratio=cfg.RENDER.PIXEL_ASPECT_RATIO,
+        fov=60,  # cfg.CAMERA.HFOV,
+    )
+
+    # use ambient lighting
+    # ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    light = kwargs.get(
+        "light", AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    )
+    # point_light = PointLights(location=eye_r, device=device)
+    return {
+        "camera": camera,
+        "light": light,
+        "eye": eye,
+        "at": at,
+        "up": up,
+        "device": device,
+        "raster_settings": raster_settings,
     }
 
 
