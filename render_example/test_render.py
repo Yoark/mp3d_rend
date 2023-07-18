@@ -13,13 +13,11 @@ from pytorch3d.renderer import (
 from render.config import cfg, get_cfg_defaults
 from render.render import (
     CameraData,
-    get_viewpoint_info,
     init_episode,
     load_meshes,
-    load_viewpoints_dict,
-    read_gz_jsonlines,
     rotate_heading_elevation,
 )
+from render.utils import get_viewpoint_info, load_viewpoints_dict, read_gz_jsonlines
 
 
 # DONE use config file to set up the parameters

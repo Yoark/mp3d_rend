@@ -1,0 +1,111 @@
+import gzip
+import json
+import os
+import pathlib
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
+
+import timm
+import torch
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
+
+
+# create folder if not exist
+def create_folder(folder_path):
+    abs_path = pathlib.Path(folder_path).resolve()
+    abs_path.mkdir(parents=True, exist_ok=True)
+    # print(abs_path, "created.")
+    return abs_path
+
+
+def read_gz_jsonlines(filename):
+    data = []
+    with open(filename, "rb") as f:
+        for args in map(json.loads, gzip.open(f)):
+            data.append(args)
+    return data
+
+
+def get_device() -> torch.device:
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        torch.cuda.set_device(device)
+    else:
+        device = torch.device("cpu")
+    return device
+
+
+def load_viewpoints_dict(conn: str) -> Tuple[Dict[str, List], int, Dict[str, Dict]]:
+    """Loads viewpoints into a dictionary of sceneId -> viewpoints -> pose, weight
+    where each viewpoint has keys viewpointId, and the value has key of pose, height}.
+    """
+    viewpoints = []
+    with open(os.path.join(conn, "scans.txt")) as f:
+        scans = [scan.strip() for scan in f.readlines()]
+        for scan in scans:
+            with open(os.path.join(conn, f"{scan}_connectivity.json")) as j:
+                data = json.load(j)
+                for item in data:
+                    if item["included"]:
+                        viewpoint_data = {
+                            "viewpointId": item["image_id"],
+                            "pose": item["pose"],
+                            "height": item["height"],
+                        }
+                        viewpoints.append((scan, viewpoint_data))
+
+    scans_to_vps = defaultdict(list)
+    for scene_id, viewpoint in viewpoints:
+        scans_to_vps[scene_id].append(viewpoint)
+
+    scan_to_vp_to_meta = defaultdict(dict)
+    for scene_id, viewpoint in viewpoints:
+        scan_to_vp_to_meta[scene_id][viewpoint["viewpointId"]] = viewpoint
+
+    return scans_to_vps, len(viewpoints), scan_to_vp_to_meta
+
+
+def get_obj_paths(base_dir, scan_ids):
+    # Format base_dir with scan_id and create a pathlib.Path object
+    obj_files = {}
+    for scan_id in scan_ids:
+        scan_path = pathlib.Path(base_dir.format(scan_id))
+        # Get the first directory inside the scan_path
+        obj_file_dir = list(scan_path.iterdir())[0]
+        # Find .obj file inside obj_file_dir
+        obj_file = [d for d in obj_file_dir.iterdir() if d.suffix == ".obj"][0]
+        obj_files[scan_id] = obj_file
+    return obj_files
+
+
+def get_viewpoint_info(
+    scan_id: str, viewpointid: str, scan_to_vps_to_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    scan_viewpoints = scan_to_vps_to_data[scan_id]
+    viewpoint_data = scan_viewpoints[viewpointid]
+    pose = viewpoint_data["pose"]
+    # height = viewpoint_data['height']
+    location = [pose[3], pose[7], pose[11]]
+    return {
+        "location": location,
+        "viewpointId": viewpointid,
+        "pose": pose,
+    }
+
+
+def build_feature_extractor(model_name, checkpoint_file=None, device="cpu"):
+    model = timm.create_model(model_name, pretrained=(checkpoint_file is None)).to(
+        device
+    )
+    if checkpoint_file is not None:
+        state_dict = torch.load(
+            checkpoint_file, map_location=lambda storage, loc: storage
+        )["state_dict"]
+        model.load_state_dict(state_dict)
+    model.eval()
+
+    config = resolve_data_config({}, model=model)
+    img_transforms = create_transform(**config)
+
+    return model, img_transforms

@@ -1,8 +1,3 @@
-import gzip
-import json
-import os
-import pathlib
-from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -23,7 +18,10 @@ from pytorch3d.renderer import (
 from pytorch3d.renderer.mesh.textures import TexturesAtlas
 from pytorch3d.structures import Meshes
 from scipy.spatial.transform import Rotation
+from sympy import Union
 from yacs.config import CfgNode
+
+from render.utils import get_obj_paths
 
 # DONE (zijiao): use config file rather than hard-coded parameters
 # setting up the correct meta parameters
@@ -39,64 +37,6 @@ from yacs.config import CfgNode
 # image_aspect_ratio = 4 / 3  # image aspect
 # image_size = (WIDTH, HEIGHT)
 
-if torch.cuda.is_available():
-    device = torch.device("cuda:0")
-    torch.cuda.set_device(device)
-else:
-    device = torch.device("cpu")
-
-
-def read_gz_jsonlines(filename):
-    data = []
-    with open(filename, "rb") as f:
-        for args in map(json.loads, gzip.open(f)):
-            data.append(args)
-    return data
-
-
-# load viewpoints -> scan : {viewpointid : pose, height}
-def load_viewpoints_dict(conn: str) -> Tuple[Dict[str, List], int, Dict[str, Dict]]:
-    """Loads viewpoints into a dictionary of sceneId -> viewpoints -> pose, weight
-    where each viewpoint has keys viewpointId, and the value has key of pose, height}.
-    """
-    viewpoints = []
-    with open(os.path.join(conn, "scans.txt")) as f:
-        scans = [scan.strip() for scan in f.readlines()]
-        for scan in scans:
-            with open(os.path.join(conn, f"{scan}_connectivity.json")) as j:
-                data = json.load(j)
-                for item in data:
-                    if item["included"]:
-                        viewpoint_data = {
-                            "viewpointId": item["image_id"],
-                            "pose": item["pose"],
-                            "height": item["height"],
-                        }
-                        viewpoints.append((scan, viewpoint_data))
-
-    scans_to_vps = defaultdict(list)
-    for scene_id, viewpoint in viewpoints:
-        scans_to_vps[scene_id].append(viewpoint)
-
-    scan_to_vp_to_meta = defaultdict(dict)
-    for scene_id, viewpoint in viewpoints:
-        scan_to_vp_to_meta[scene_id][viewpoint["viewpointId"]] = viewpoint
-
-    return scans_to_vps, len(viewpoints), scan_to_vp_to_meta
-
-
-def get_obj_paths(base_dir, scan_ids):
-    # Format base_dir with scan_id and create a pathlib.Path object
-    obj_files = {}
-    for scan_id in scan_ids:
-        scan_path = pathlib.Path(base_dir.format(scan_id))
-        # Get the first directory inside the scan_path
-        obj_file_dir = list(scan_path.iterdir())[0]
-        # Find .obj file inside obj_file_dir
-        obj_file = [d for d in obj_file_dir.iterdir() if d.suffix == ".obj"][0]
-        obj_files[scan_id] = obj_file
-    return obj_files
-
 
 # * rotation operations
 def normalize(v):
@@ -106,15 +46,6 @@ def normalize(v):
 def rotate_vector(vec, axis, angle_radians):
     rotation = Rotation.from_rotvec(axis * angle_radians, degrees=False)
     return rotation.apply(vec)
-
-
-def get_device() -> torch.device:
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        torch.cuda.set_device(device)
-    else:
-        device = torch.device("cpu")
-    return device
 
 
 # Camera parameters
@@ -164,7 +95,9 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     return eye.tolist(), rotated_at.tolist(), rotated_up_vector.tolist()
 
 
-def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, Tuple]:
+def load_meshes(
+    scan_ids: List[str], mesh_dir: str, with_atlas: bool = True, **kwargs: Any
+) -> Dict[str, Tuple]:
     """load meshes from scan ids
 
     Args:
@@ -186,36 +119,27 @@ def load_meshes(scan_ids: List[str], mesh_dir: str, **kwargs: Any) -> Dict[str, 
             texture_wrap="repeat",
             texture_atlas_size=texture_atlas_size,
         )
-        atlas = aux.texture_atlas
-        if atlas.ndim == 4:
-            atlas = atlas.unsqueeze(0)
-        textures = TexturesAtlas(atlas=atlas)
+        if with_atlas:
+            atlas = aux.texture_atlas
+            if atlas.ndim == 4:
+                atlas = atlas.unsqueeze(0)
+            textures = TexturesAtlas(atlas=atlas)
+            mesh_dict[scan] = (
+                verts.to(device),
+                faces.verts_idx.to(device),
+                textures.to(device),
+            )
+        else:
+            mesh_dict[scan] = (verts.to(device), faces.verts_idx.to(device), aux)
 
         # TODO explore padding to potentially speed up
         # meshes = Meshes(verts=n_verts, faces=n_face_verts_idx, textures=n_textures)
         # meshes = meshes.to(device)
-        mesh_dict[scan] = (
-            verts,
-            faces.verts_idx,
-            textures,
-        )
+
     return mesh_dict
 
 
 # function prepare for camera and viewpoint info
-def get_viewpoint_info(
-    scan_id: str, viewpointid: str, scan_to_vps_to_data: Dict[str, Any]
-) -> Dict[str, Any]:
-    scan_viewpoints = scan_to_vps_to_data[scan_id]
-    viewpoint_data = scan_viewpoints[viewpointid]
-    pose = viewpoint_data["pose"]
-    # height = viewpoint_data['height']
-    location = [pose[3], pose[7], pose[11]]
-    return {
-        "location": location,
-        "viewpointId": viewpointid,
-        "pose": pose,
-    }
 
 
 # TODO join function into classes
@@ -258,7 +182,8 @@ def init_episode(
     heading: float,
     elevation: float,
     cfg: CfgNode,
-    mesh: Optional[Meshes] = None,
+    mesh: Optional[Any],
+    K=None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     # load mesh
@@ -271,6 +196,7 @@ def init_episode(
             faces_per_pixel=1,
         ),
     )
+    device = kwargs.get("device", "cpu")
     pose = viewpoint_data["pose"]
     eye = [pose[3], pose[7], pose[11]]  # location
     at = [eye[0], eye[1] + 1, eye[2]]
@@ -280,28 +206,37 @@ def init_episode(
     R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
     camera = FoVPerspectiveCameras(
         device=device,
+        # zfar=500,
+        # znear=20,
         R=R,
         T=T,
+        # K=K,
         aspect_ratio=cfg.RENDER.PIXEL_ASPECT_RATIO,
-        fov=cfg.CAMERA.HFOV,
+        fov=60,  # cfg.CAMERA.HFOV,
     )
 
     # use ambient lighting
-    ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    # ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    light = kwargs.get(
+        "light", AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    )
     # point_light = PointLights(location=eye_r, device=device)
 
     renderer = MeshRenderer(
         rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
-        shader=SoftPhongShader(
-            device=device,
-            cameras=camera,
-            # lights=lights
-        ),
+        shader=SoftPhongShader(device=device, cameras=camera, lights=light),
     )
     if mesh:
-        images = renderer(mesh, cameras=camera, lights=ambient)
+        if isinstance(mesh, tuple):
+            verts, faces, textures = mesh
+            mesh = Meshes(
+                verts=[verts.to(device)],
+                faces=[faces.to(device)],
+                textures=textures.to(device),
+            )
+        images = renderer(mesh, cameras=camera, lights=light)
         #! This does not work images = renderer(mesh, cameras=cameras, lights=point_light)
-        plt.figure(figsize=(4, 3))
+        plt.figure(figsize=(8, 6))
         plt.imshow(images[0, ..., :3].cpu().numpy())
         plt.axis("off")
     return {
@@ -310,7 +245,65 @@ def init_episode(
         "at": at,
         "up": up,
         "camera": camera,
-        "light": ambient,
+        "light": light,
+        "mesh": mesh,
+    }
+
+
+def get_render_params(
+    viewpoint_data: dict,
+    heading: float,
+    elevation: float,
+    cfg: CfgNode,
+    K=None,
+    require_grad=False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    # load mesh
+    # initialize the camera
+    raster_settings = kwargs.get(
+        "raster_settings",  # render settings
+        RasterizationSettings(
+            image_size=(cfg.RENDER.IMAGE_SIZE),
+            blur_radius=0.0,
+            faces_per_pixel=1,
+        ),
+    )
+    device = kwargs.get("device", "cpu")
+    pose = viewpoint_data["pose"]
+    eye = [pose[3], pose[7], pose[11]]  # location
+    at = [eye[0], eye[1] + 1, eye[2]]
+    up = [0, 0, 1]
+    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
+    # init camera
+    R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
+    R = R.requires_grad_(require_grad)
+    T = T.requires_grad_(require_grad)
+    camera = FoVPerspectiveCameras(
+        device=device,
+        # zfar=500,
+        # znear=20,
+        R=R,
+        T=T,
+        # K=K,
+        aspect_ratio=cfg.RENDER.PIXEL_ASPECT_RATIO,
+        fov=60,  # cfg.CAMERA.HFOV,
+    )
+
+    # use ambient lighting
+    # ambient = AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    light = kwargs.get(
+        "light", AmbientLights(device=device, ambient_color=((1, 1, 1),))
+    )
+    # point_light = PointLights(location=eye_r, device=device)
+    return {
+        "camera": camera,
+        "light": light,
+        "eye": eye,
+        "at": at,
+        "up": up,
+        "device": device,
+        "raster_settings": raster_settings,
     }
 
 

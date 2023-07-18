@@ -4,3 +4,4 @@ render_example/rendered_sampled/
 temp/*
 __pycache__/
 *.code-workspace
+**/save/*

@@ -1,0 +1,16 @@
+DATA:
+  CONNECTIVITY_DIR: /Users/zijiao/home/research/data/matterport3d/connectivity
+  MESH_DIR: /Users/zijiao/home/research/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh
+  MATTERPORT_IMAGE_DIR: /Users/zijiao/home/research/data/matterport3d/data/v1/scans
+  RXR_DIR: /Users/zijiao/home/research/data/RxR/rxr_train_guide.jsonl.gz
+  RXR:
+    TRAIN: /Users/zijiao/home/research/data/RxR/rxr_train_guide.jsonl.gz
+    VAL_UNSEEN: /Users/zijiao/home/research/data/RxR/rxr_val_unseen_guide.jsonl.gz
+
+RENDER:
+  IMAGE_MODEL_NAME: vit_base_patch16_224
+TEST: True
+SAVE:
+  IMAGE_DIR: render_example/save/images
+  VAL_UNSEEN_POSE: render_example/save/poses
+

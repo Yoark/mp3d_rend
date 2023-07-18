@@ -27,6 +27,9 @@ from progressbar import ProgressBar
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 
+from render.render import build_simulator
+from render.utils import build_feature_extractor
+
 
 def load_viewpoint_ids(connectivity_dir):
     viewpoint_ids = []
@@ -56,39 +59,6 @@ LOGIT_SIZE = 1000
 WIDTH = 640
 HEIGHT = 480
 VFOV = 60
-
-
-def build_feature_extractor(model_name, checkpoint_file=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model = timm.create_model(model_name, pretrained=(checkpoint_file is None)).to(
-        device
-    )
-    if checkpoint_file is not None:
-        state_dict = torch.load(
-            checkpoint_file, map_location=lambda storage, loc: storage
-        )["state_dict"]
-        model.load_state_dict(state_dict)
-    model.eval()
-
-    config = resolve_data_config({}, model=model)
-    img_transforms = create_transform(**config)
-
-    return model, img_transforms, device
-
-
-def build_simulator(connectivity_dir, scan_dir):
-    sim = MatterSim.Simulator()
-    sim.setNavGraphPath(connectivity_dir)
-    sim.setDatasetPath(scan_dir)
-    sim.setCameraResolution(WIDTH, HEIGHT)
-    sim.setCameraVFOV(math.radians(VFOV))
-    sim.setDiscretizedViewingAngles(True)
-    sim.setDepthEnabled(False)
-    sim.setPreloadingEnabled(False)
-    sim.setBatchSize(1)
-    sim.initialize()
-    return sim
 
 
 def process_features(proc_id, out_queue, scanvp_list, args):
