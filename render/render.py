@@ -251,7 +251,7 @@ def init_episode(
 
 
 def get_render_params(
-    viewpoint_data: dict,
+    pose,
     heading: float,
     elevation: float,
     cfg: CfgNode,
@@ -270,7 +270,6 @@ def get_render_params(
         ),
     )
     device = kwargs.get("device", "cpu")
-    pose = viewpoint_data["pose"]
     eye = [pose[3], pose[7], pose[11]]  # location
     at = [eye[0], eye[1] + 1, eye[2]]
     up = [0, 0, 1]

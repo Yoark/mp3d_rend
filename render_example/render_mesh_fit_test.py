@@ -38,14 +38,24 @@ from render.utils import get_device, get_viewpoint_info, load_viewpoints_dict
 
 # mesh
 def visualize_prediction(
-    predicted_mesh, renderer=None, target_image=None, title="", save_dir=None
+    predicted_image=None,
+    # predicted_mesh=None,
+    # renderer=None,
+    target_image=None,
+    title="",
+    save_dir=None,
 ):
     inds = 3
+
     with torch.no_grad():
-        predicted_images = renderer(predicted_mesh)
+        # if not predicted_image:
+        # predicted_images = renderer(predicted_mesh)
+        # else:
+        predicted_images = predicted_image.clone()
+        predicted_images = predicted_images[0, ..., :inds].cpu().detach().numpy()
     plt.figure(figsize=(20, 10))
     plt.subplot(1, 2, 1)
-    plt.imshow(predicted_images[0, ..., :inds].cpu().detach().numpy())
+    plt.imshow(predicted_images)
 
     plt.subplot(1, 2, 2)
     plt.imshow(target_image.cpu().detach().numpy())
@@ -175,7 +185,7 @@ print(scan, vp, heading, elevation)
 raster_settings = RasterizationSettings(
     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
     blur_radius=0.0,
-    faces_per_pixel=10,
+    faces_per_pixel=1,
 )
 
 # set lights
@@ -219,15 +229,15 @@ losses = {
     "sparsity": {"weight": 0.1, "values": []},
 }
 
-optimizer = torch.optim.AdamW([deform_verts, atlas], lr=1e-3, weight_decay=1e-4)
+optimizer = torch.optim.AdamW([atlas], lr=1e-3, weight_decay=1e-4)
 # optimizer = torch.optim.SGD([deform_verts, atlas], lr=0.01, momentum=0.9)
 for i in iter:
     optimizer.zero_grad()
     new_mesh = mesh.offset_verts(deform_verts)
     image = renderer(new_mesh)
     loss = {k: torch.tensor(0.0, device=device) for k in losses}
-    update_mesh_shape_prior_losses(new_mesh, loss)
-    loss["sparsity"] = torch.norm(deform_verts, p=1)
+    # update_mesh_shape_prior_losses(new_mesh, loss)
+    # loss["sparsity"] = torch.norm(deform_verts, p=1)
     # compute mse
     loss["image"] = mse_loss(image.squeeze()[..., :3], target_image, reduction="mean")
     sum_loss = torch.tensor(0.0, device=device)
@@ -240,9 +250,10 @@ for i in iter:
 
     if i % plot_period == 0:
         visualize_prediction(
-            new_mesh,
+            image,
+            # new_mesh,
             title="iter: %d" % i,
-            renderer=renderer,
+            # renderer=renderer,
             target_image=target_image,
             save_dir=savedir,
         )
