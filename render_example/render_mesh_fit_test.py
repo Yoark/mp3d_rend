@@ -192,8 +192,9 @@ raster_settings = RasterizationSettings(
 ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=True)[None, :]
 light = AmbientLights(device=device, ambient_color=ambient_color)
 # set up renderer and intial view
+pose = viewpoint_info["pose"]
 render_params = get_render_params(
-    viewpoint_info,
+    pose,
     heading,
     elevation,
     raster_settings=raster_settings,
