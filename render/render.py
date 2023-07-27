@@ -116,7 +116,7 @@ def load_meshes(
             scan_path,
             load_textures=True,
             create_texture_atlas=True,
-            texture_wrap="repeat",
+            texture_wrap="clamp",
             texture_atlas_size=texture_atlas_size,
         )
         if with_atlas:

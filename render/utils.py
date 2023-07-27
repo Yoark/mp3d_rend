@@ -82,8 +82,7 @@ def get_obj_paths(base_dir, scan_ids):
 def get_viewpoint_info(
     scan_id: str, viewpointid: str, scan_to_vps_to_data: Dict[str, Any]
 ) -> Dict[str, Any]:
-    scan_viewpoints = scan_to_vps_to_data[scan_id]
-    viewpoint_data = scan_viewpoints[viewpointid]
+    viewpoint_data = scan_to_vps_to_data[scan_id][viewpointid]
     pose = viewpoint_data["pose"]
     # height = viewpoint_data['height']
     location = [pose[3], pose[7], pose[11]]

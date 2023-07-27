@@ -16,6 +16,9 @@ _C.DATA.RXR = CN()
 _C.DATA.RXR.TRAIN = "/mnt/sw/vln/data/RxR/rxr_train_guide.jsonl.gz"
 _C.DATA.RXR.VAL_UNSEEN = "/mnt/sw/vln/data/RxR/rxr_val_unseen_guide.jsonl.gz"
 
+_C.DATA.POSE = ""
+
+
 _C.CAMERA = CN()
 _C.CAMERA.VFOV = 60
 _C.CAMERA.WIDTH = 640
