@@ -133,7 +133,8 @@ with open("./render_example/save/poses/val_unseen_scan2vpspose.json") as f:
 
 _, _, scan_to_vps_to_data = load_viewpoints_dict(cfg.DATA.CONNECTIVITY_DIR)
 
-scan = scan_ids[-3]
+# scan = scan_ids[-3]EU6Fwq7SyZv
+scan = "EU6Fwq7SyZv"
 test_render_set = scan2vpspose[scan]
 vp = test_render_set[0]["vp"]
 heading = test_render_set[0]["heading"]
@@ -186,6 +187,7 @@ raster_settings = RasterizationSettings(
     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
     blur_radius=0.0,
     faces_per_pixel=1,
+    cull_to_frustum=True,
 )
 
 # set lights
@@ -218,7 +220,7 @@ target_image = torch.from_numpy(np.array(target_image)).to(device) / 255.0
 
 
 os.makedirs("render_example/save/fitting", exist_ok=True)
-savedir = "render_example/save/fitting"
+savedir = f"render_example/save/fitting/{scan}_{vp}_{heading}_{elevation}"
 
 plot_period = 100
 iter = trange(1000)

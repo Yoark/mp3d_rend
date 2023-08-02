@@ -64,7 +64,9 @@ def get_mesh_renderer(cfg, scan):
         faces=[faces],
         textures=textures,
     )
-
+    # 1. 1 张图，save gradient
+    # 2. 2 张图，save gradient
+    # 是不是backprop会不会到同一个mesh上
     # replace this with scan_id
     with open("./render_example/save/poses/val_unseen_scan2vpspose.json") as f:
         scan2vpspose = json.load(f)

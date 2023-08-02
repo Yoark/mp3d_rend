@@ -5,3 +5,5 @@ temp/*
 __pycache__/
 *.code-workspace
 **/save/*
+__pycache__/
+**/**/__pycache__
