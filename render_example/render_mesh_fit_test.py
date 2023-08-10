@@ -61,6 +61,9 @@ def visualize_prediction(
     plt.imshow(target_image.cpu().detach().numpy())
     plt.title(title)
     plt.axis("off")
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"Created {save_dir}")
     plt.savefig(f"{save_dir}/{title}.png")
 
 
@@ -139,12 +142,18 @@ test_render_set = scan2vpspose[scan]
 vp = test_render_set[0]["vp"]
 heading = test_render_set[0]["heading"]
 elevation = test_render_set[0]["elevation"]
+
+# load second goal image
+vp2 = test_render_set[1]["vp"]
+heading2 = test_render_set[1]["heading"]
+elevation2 = test_render_set[1]["elevation"]
+
 device = get_device()
 mesh_data = load_meshes(
     [scan],
     mesh_dir=cfg.DATA.MESH_DIR,
     device=device,
-    texture_atlas_size=50,
+    texture_atlas_size=5,
     with_atlas=False,
 )
 viewpoint_info = get_viewpoint_info(scan, vp, scan_to_vps_to_data)
@@ -178,7 +187,8 @@ mesh = Meshes(
 # mesh.offset_verts(-center)
 
 # current render heading and elev
-print(scan, vp, heading, elevation)
+print(f"first goal {scan}, {vp}, {heading}, {elevation}")
+print(f"second goal {scan}, {vp2}, {heading2}, {elevation2}")
 # display target image.
 # read_image(scan, vp, heading, elevation)
 
@@ -187,7 +197,8 @@ raster_settings = RasterizationSettings(
     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
     blur_radius=0.0,
     faces_per_pixel=1,
-    cull_to_frustum=True,
+    cull_to_frustum=False,
+    cull_backfaces=True,
 )
 
 # set lights
@@ -195,10 +206,21 @@ ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=True)
 light = AmbientLights(device=device, ambient_color=ambient_color[None, :])
 # set up renderer and intial view
 pose = viewpoint_info["pose"]
+# maybe need to batchfy this function
 render_params = get_render_params(
     pose,
     heading,
     elevation,
+    raster_settings=raster_settings,
+    cfg=cfg,
+    device=device,
+)
+
+# get render params for second goal
+render_params2 = get_render_params(
+    pose,
+    heading2,
+    elevation2,
     raster_settings=raster_settings,
     cfg=cfg,
     device=device,
@@ -209,14 +231,28 @@ raster_settings = render_params["raster_settings"]
 device = render_params["device"]
 light = render_params["light"]
 
+# get camera2
+camera2 = render_params2["camera"]
+
 renderer = MeshRenderer(
     rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
     shader=SoftPhongShader(device=device, cameras=camera, lights=light),
 )
+# set up renderer2 this is temporary
+renderer2 = MeshRenderer(
+    rasterizer=MeshRasterizer(cameras=camera2, raster_settings=raster_settings),
+    shader=SoftPhongShader(device=device, cameras=camera2, lights=light),
+)
 
-target_image = read_image(scan, vp, heading, elevation)
 
-target_image = torch.from_numpy(np.array(target_image)).to(device) / 255.0
+def get_target_image(scan, vp, heading, elevation, normalize=True):
+    target_image = read_image(scan, vp, heading, elevation)
+    target_image = torch.from_numpy(np.array(target_image)).to(device) / 255.0
+    return target_image
+
+
+target_image = get_target_image(scan, vp, heading, elevation)
+target_image2 = get_target_image(scan, vp2, heading2, elevation2)
 
 
 os.makedirs("render_example/save/fitting", exist_ok=True)
@@ -226,6 +262,7 @@ plot_period = 100
 iter = trange(1000)
 losses = {
     "image": {"weight": 1.0, "values": []},
+    "image2": {"weight": 1.0, "values": []},
     "edge": {"weight": 0.1, "values": []},
     "normal": {"weight": 0.1, "values": []},
     "laplacian": {"weight": 0.1, "values": []},
@@ -238,11 +275,16 @@ for i in iter:
     optimizer.zero_grad()
     new_mesh = mesh.offset_verts(deform_verts)
     image = renderer(new_mesh)
+    image2 = renderer2(new_mesh)
     loss = {k: torch.tensor(0.0, device=device) for k in losses}
     # update_mesh_shape_prior_losses(new_mesh, loss)
     # loss["sparsity"] = torch.norm(deform_verts, p=1)
     # compute mse
     loss["image"] = mse_loss(image.squeeze()[..., :3], target_image, reduction="mean")
+    loss["image2"] = mse_loss(
+        image2.squeeze()[..., :3], target_image2, reduction="mean"
+    )
+
     sum_loss = torch.tensor(0.0, device=device)
     for k, l in loss.items():
         sum_loss += l * losses[k]["weight"]
@@ -255,9 +297,18 @@ for i in iter:
         visualize_prediction(
             image,
             # new_mesh,
-            title="iter: %d" % i,
+            title="iter: %d image1" % i,
             # renderer=renderer,
             target_image=target_image,
+            save_dir=savedir,
+        )
+
+        visualize_prediction(
+            image2,
+            # new_mesh,
+            title="iter: %d image2" % i,
+            # renderer=renderer,
+            target_image=target_image2,
             save_dir=savedir,
         )
     sum_loss.backward()

@@ -108,17 +108,17 @@ def get_mesh_renderer(cfg, scan):
     light = render_params["light"]
 
     renderer = MeshRenderer(
-        rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
-        shader=SoftPhongShader(cameras=camera, device=device, lights=light),
+        rasterizer=MeshRasterizer(raster_settings=raster_settings),
+        shader=SoftPhongShader(device=device, lights=light),
     )
 
-    return renderer, mesh
+    return renderer, mesh, camera
 
 
 if __name__ == "__main__":
     scan = "x8F5xyUWy9e"
-    renderer, mesh = get_mesh_renderer(cfg, scan)
-    image = renderer(mesh)
+    renderer, mesh, camera = get_mesh_renderer(cfg, scan)
+    image = renderer(mesh, cameras=camera)
     plt.imshow(image[..., :3].squeeze().cpu().numpy())
     plt.axis("off")
     plt.savefig("./test.png")

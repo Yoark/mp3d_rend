@@ -10,6 +10,7 @@ from PIL import Image
 
 from render.config import get_cfg_defaults
 from render.matterport_utils import build_simulator
+from render.render import get_camera, get_mesh_renderer
 from render.utils import (
     build_feature_extractor,
     create_folder,
@@ -28,13 +29,13 @@ print(configs)
 connectivity_dir = configs.DATA.CONNECTIVITY_DIR
 scan_dir = configs.DATA.MESH_DIR
 image_dir = configs.DATA.MATTERPORT_IMAGE_DIR
-val_seen_dir = configs.DATA.RXR.VAL_SEEN
+val_unseen_dir = configs.DATA.RXR.VAL_UNSEEN
 
 # load rxr_val_unseen_guide.jsonl.gz
-rxr_val_seen = read_gz_jsonlines(val_seen_dir)
+rxr_val_unseen = read_gz_jsonlines(val_unseen_dir)
 
 scan_vps = set()
-for item in rxr_val_seen:
+for item in rxr_val_unseen:
     scan = item["scan"]
     viewpoints = item["path"]
     scan_vps.update([(scan, vp) for vp in viewpoints])
@@ -53,8 +54,8 @@ torch.set_grad_enabled(False)
 image_folder = configs.SAVE.IMAGE_DIR
 save_folder = create_folder(image_folder)
 
-if configs.TEST == True:
-    scan_vps = list(scan_vps)
+# if configs.TEST == True:
+#     scan_vps = list(scan_vps)
 
 
 scan_vp_cam_poses = []
@@ -73,43 +74,35 @@ for scan, vp in pbar:
         assert state.viewIndex == ix
 
         # save the rgb as image here for checking
-        image = np.array(state.rgb, copy=True)
-        image = Image.fromarray(image[:, :, ::-1])
+        renderer, mesh = get_mesh_renderer(configs, scan)
+        camera = get_camera(configs, state.location, state.heading, state.elevation)
+        image = renderer(mesh, cameras=camera)
+        image = image[0, ..., :3]
+        # feature extractor?
 
-        scan_folder = create_folder(os.path.join(save_folder, scan))
-        image_path = os.path.join(
-            scan_folder, f"{scan}_{vp}_{state.heading}_{state.elevation}.png"
-        )
-        #! normalize and convert to tensor input for feature extractor
-
-        image.save(image_path)
-
-        scan_vp_cam_poses.append(
-            (scan, vp, state.viewIndex, state.heading, state.elevation)
-        )
 
 # save scan_vp_cam_poses
 #  TODO render here
 
 
-data = {
-    "VFOV": configs.CAMERA.VFOV,
-    "resolution": [configs.CAMERA.WIDTH, configs.CAMERA.HEIGHT],
-    "poses": [
-        {
-            "scan": scan,
-            "vp": vp,
-            "viewIndex": viewIndex,
-            "heading": heading,
-            "elevation": elevation,
-        }
-        for scan, vp, viewIndex, heading, elevation in scan_vp_cam_poses
-    ],
-}
+# data = {
+#     "VFOV": configs.CAMERA.VFOV,
+#     "resolution": [configs.CAMERA.WIDTH, configs.CAMERA.HEIGHT],
+#     "poses": [
+#         {
+#             "scan": scan,
+#             "vp": vp,
+#             "viewIndex": viewIndex,
+#             "heading": heading,
+#             "elevation": elevation,
+#         }
+#         for scan, vp, viewIndex, heading, elevation in scan_vp_cam_poses
+#     ],
+# }
 
-# save to json
-_ = create_folder(configs.SAVE.VAL_SEEN_POSE)
+# # save to json
+# _ = create_folder(configs.SAVE.VAL_UNSEEN_POSE)
 
-with open(os.path.join(configs.SAVE.VAL_SEEN_POSE, "val_seen_pose.json"), "w") as f:
-    json.dump(data, f)
-    print(f"Save poses to {configs.SAVE.VAL_SEEN_POSE}/val_seen_pose.json")
+# with open(os.path.join(configs.SAVE.VAL_UNSEEN_POSE, "val_unseen_pose.json"), "w") as f:
+#     json.dump(data, f)
+#     print(f"Save poses to {configs.SAVE.VAL_UNSEEN_POSE}/val_unseen_pose.json")

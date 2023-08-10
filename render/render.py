@@ -66,6 +66,19 @@ def rotate_heading(eye, at, up, angle_radians):
 
 
 def rotate_heading_elevation(eye, at, up, heading, elevation):
+    # TODO need to batchify this function
+    """Rotate the camera by heading and elevation.
+
+    Args:
+        eye (float): camera location
+        at (float): camera look at
+        up (float): camera up vector
+        heading (float): heading angle in radians
+        elevation (float): elevation angle in radians
+
+    Returns:
+        Tuple: resulted (eye, at, up)
+    """
     eye = np.array(eye)
     at = np.array(at)
     up = np.array(up)
@@ -276,8 +289,8 @@ def get_render_params(
     eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
     # init camera
     R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
-    R = R.requires_grad_(require_grad)
-    T = T.requires_grad_(require_grad)
+    # R = R.requires_grad_(require_grad)
+    # T = T.requires_grad_(require_grad)
     camera = FoVPerspectiveCameras(
         device=device,
         # zfar=500,
@@ -313,3 +326,74 @@ class CameraData:
         self.eye = [pose[3], pose[7], pose[11]]
         self.at = [self.eye[0], self.eye[1] + 1, self.eye[2]]
         self.up = [0, 0, 1]
+
+
+def get_mesh_renderer(cfg, scan):
+    cfg.merge_from_file("render_example/configs/mp3d_render.yaml")
+    device = get_device()
+
+    mesh_data = load_meshes(
+        [scan],
+        mesh_dir=cfg.DATA.MESH_DIR,
+        device=device,
+        texture_atlas_size=cfg.MESH.TEXTURE_ATLAS_SIZE,
+        with_atlas=False,
+    )
+    verts, faces, aux = mesh_data[scan]
+    # create mesh
+    atlas = aux.texture_atlas
+    if atlas.ndim == 4:
+        atlas = atlas.unsqueeze(0)
+    atlas = atlas.to(device)
+    verts = verts.to(device)
+    faces = faces.to(device)
+    # atlas = Parameter(atlas)
+    # atlas.requires_grad = True
+    textures = TexturesAtlas(atlas=atlas)
+    # verts.requires_grad = True
+    # verts = Parameter(verts)
+    # textures = Parameter(textures)
+    mesh = Meshes(
+        verts=[verts],
+        faces=[faces],
+        textures=textures,
+    )
+
+    # set rasterazation setting
+    raster_settings = RasterizationSettings(
+        image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
+        blur_radius=0.0,
+        faces_per_pixel=5,
+    )
+
+    # set lights
+    ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=True)[None, :]
+    light = AmbientLights(device=device, ambient_color=ambient_color)
+
+    renderer = MeshRenderer(
+        rasterizer=MeshRasterizer(raster_settings=raster_settings),
+        shader=SoftPhongShader(device=device, lights=light),
+    )
+    return renderer, mesh
+
+
+def get_camera(cfg, eye, heading, elevation, **kwargs):
+    device = kwargs.get("device", "cpu")
+    at = [eye[0], eye[1] + 1, eye[2]]
+    up = [0, 0, 1]
+    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
+    # init camera
+    R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
+    # R = R.requires_grad_(require_grad)
+    # T = T.requires_grad_(require_grad)
+    camera = FoVPerspectiveCameras(
+        device=device,
+        # zfar=500,
+        # znear=20,
+        R=R,
+        T=T,
+        # K=K,
+        aspect_ratio=cfg.RENDER.PIXEL_ASPECT_RATIO,
+        fov=60,  # cfg.CAMERA.HFOV,
+    )
+    return camera
