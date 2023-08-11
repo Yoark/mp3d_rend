@@ -70,15 +70,16 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     """Rotate the camera by heading and elevation.
 
     Args:
-        eye (float): camera location
-        at (float): camera look at
-        up (float): camera up vector
-        heading (float): heading angle in radians
-        elevation (float): elevation angle in radians
+        eye (array): camera location
+        at (array): camera look at
+        up (array): camera up vector
+        heading list: heading angle in radians
+        elevation (list): elevation angle in radians
 
     Returns:
-        Tuple: resulted (eye, at, up)
+        Tuple: resulted (eye: torch.tensor, at: torch.tensor , up: torch.tensor)
     """
+    # TODO this can be precomputed
     eye = np.array(eye)
     at = np.array(at)
     up = np.array(up)
@@ -94,8 +95,8 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     right = right / np.linalg.norm(right)
 
     # Create rotations for heading and elevation
-    heading_rotation = Rotation.from_rotvec(-heading * up)
-    elevation_rotation = Rotation.from_rotvec(elevation * right)
+    heading_rotation = Rotation.from_rotvec(-heading * up.reshape(1, 3))  #
+    elevation_rotation = Rotation.from_rotvec(elevation * right.reshape(1, 3))
     combined_rotation = heading_rotation * elevation_rotation
 
     # Rotate the view direction and up vector
@@ -103,9 +104,13 @@ def rotate_heading_elevation(eye, at, up, heading, elevation):
     rotated_up_vector = combined_rotation.apply(up)
 
     # Calculate new at-point
-    rotated_at = eye + rotated_view_direction
+    rotated_at = eye + rotated_view_direction  # N, 3, N is the number of heading
 
-    return eye.tolist(), rotated_at.tolist(), rotated_up_vector.tolist()
+    return (
+        torch.tensor(eye, dtype=torch.float32).unsqueeze(0),
+        torch.tensor(rotated_at, dtype=torch.float32),
+        torch.tensor(rotated_up_vector, dtype=torch.float32),
+    )
 
 
 def load_meshes(
@@ -265,8 +270,8 @@ def init_episode(
 
 def get_render_params(
     pose,
-    heading: float,
-    elevation: float,
+    headings: list,
+    elevations: list,
     cfg: CfgNode,
     K=None,
     require_grad=False,
@@ -286,12 +291,14 @@ def get_render_params(
     eye = [pose[3], pose[7], pose[11]]  # location
     at = [eye[0], eye[1] + 1, eye[2]]
     up = [0, 0, 1]
-    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
+    headings = np.array(headings).reshape(-1, 1)
+    elevations = np.array(elevations).reshape(-1, 1)
+    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, headings, elevations)
     # init camera
-    R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
+    R, T = look_at_view_transform(eye=eye_r, up=up_r, at=at_r)
     # R = R.requires_grad_(require_grad)
     # T = T.requires_grad_(require_grad)
-    camera = FoVPerspectiveCameras(
+    cameras = FoVPerspectiveCameras(
         device=device,
         # zfar=500,
         # znear=20,
@@ -309,7 +316,7 @@ def get_render_params(
     )
     # point_light = PointLights(location=eye_r, device=device)
     return {
-        "camera": camera,
+        "cameras": cameras,
         "light": light,
         "eye": eye,
         "at": at,

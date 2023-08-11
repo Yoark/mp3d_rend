@@ -52,7 +52,7 @@ def visualize_prediction(
         # predicted_images = renderer(predicted_mesh)
         # else:
         predicted_images = predicted_image.clone()
-        predicted_images = predicted_images[0, ..., :inds].cpu().detach().numpy()
+        predicted_images = predicted_images[..., :inds].cpu().detach().numpy()
     plt.figure(figsize=(20, 10))
     plt.subplot(1, 2, 1)
     plt.imshow(predicted_images)
@@ -148,6 +148,9 @@ vp2 = test_render_set[1]["vp"]
 heading2 = test_render_set[1]["heading"]
 elevation2 = test_render_set[1]["elevation"]
 
+headings = [heading, heading2]
+elevations = [elevation, elevation2]
+
 device = get_device()
 mesh_data = load_meshes(
     [scan],
@@ -162,7 +165,8 @@ viewpoint_info = get_viewpoint_info(scan, vp, scan_to_vps_to_data)
 # maybe scale the mesh to 0,
 
 verts, faces, aux = mesh_data[scan]
-deform_verts = torch.full(verts.shape, 0.0, device=device, requires_grad=True)
+# ! deform verts is not useful for currrnt case
+# deform_verts = torch.full(verts.shape, 0.0, device=device, requires_grad=True)
 
 atlas = aux.texture_atlas
 if atlas.ndim == 4:
@@ -171,14 +175,36 @@ atlas = atlas.to(device)
 verts = verts.to(device)
 faces = faces.to(device)
 # atlas = Parameter(atlas)
-atlas.requires_grad = True
-textures = TexturesAtlas(atlas=atlas)
+# atlas.requires_grad = True
+# atlas2 = atlas.clone()
+# atlas = torch.nn.Parameter(atlas, requires_grad=True)
+# textures = TexturesAtlas(atlas=atlas)
+# textures2 = TexturesAtlas(atlas=atlas2)
 # verts.requires_grad = True
 # verts = Parameter(verts)
 # textures = Parameter(textures)
-mesh = Meshes(
-    verts=[verts],
-    faces=[faces],
+# mesh = Meshes(
+#     verts=[verts],
+#     faces=[faces],
+#     textures=textures,
+# )
+
+# meshes = mesh.extend(2)
+
+# atlas = meshes[0].textures.atlas_packed().clone().detach()
+# atlas_packed.requires_grad = True
+# meshes.textures = TexturesAtlas(atlas=atlas_packed)
+# meshes = [mesh] * 2
+# * testing different methods for combining a mesh
+verts = [verts, verts.clone().detach()]
+faces = [faces, faces.clone().detach()]
+# textures = TexturesAtlas(atlas=torch.cat([atlas, atlas2], dim=0))
+comb_atlas = torch.cat([atlas, atlas], dim=0)
+comb_atlas = torch.nn.Parameter(comb_atlas, requires_grad=True)
+textures = TexturesAtlas(atlas=comb_atlas)
+meshes = Meshes(
+    verts=verts,
+    faces=faces,
     textures=textures,
 )
 # N = verts.shape[0]
@@ -209,40 +235,40 @@ pose = viewpoint_info["pose"]
 # maybe need to batchfy this function
 render_params = get_render_params(
     pose,
-    heading,
-    elevation,
+    headings,
+    elevations,
     raster_settings=raster_settings,
     cfg=cfg,
     device=device,
 )
 
 # get render params for second goal
-render_params2 = get_render_params(
-    pose,
-    heading2,
-    elevation2,
-    raster_settings=raster_settings,
-    cfg=cfg,
-    device=device,
-)
+# render_params2 = get_render_params(
+#     pose,
+#     heading2,
+#     elevation2,
+#     raster_settings=raster_settings,
+#     cfg=cfg,
+#     device=device,
+# )
 # get renderer
-camera = render_params["camera"]
+cameras = render_params["cameras"]
 raster_settings = render_params["raster_settings"]
 device = render_params["device"]
 light = render_params["light"]
 
 # get camera2
-camera2 = render_params2["camera"]
+# camera2 = render_params2["camera"]
 
 renderer = MeshRenderer(
-    rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
-    shader=SoftPhongShader(device=device, cameras=camera, lights=light),
+    rasterizer=MeshRasterizer(raster_settings=raster_settings),
+    shader=SoftPhongShader(device=device, lights=light),
 )
 # set up renderer2 this is temporary
-renderer2 = MeshRenderer(
-    rasterizer=MeshRasterizer(cameras=camera2, raster_settings=raster_settings),
-    shader=SoftPhongShader(device=device, cameras=camera2, lights=light),
-)
+# renderer2 = MeshRenderer(
+#     rasterizer=MeshRasterizer(cameras=camera2, raster_settings=raster_settings),
+#     shader=SoftPhongShader(device=device, cameras=camera2, lights=light),
+# )
 
 
 def get_target_image(scan, vp, heading, elevation, normalize=True):
@@ -251,7 +277,7 @@ def get_target_image(scan, vp, heading, elevation, normalize=True):
     return target_image
 
 
-target_image = get_target_image(scan, vp, heading, elevation)
+target_image1 = get_target_image(scan, vp, heading, elevation)
 target_image2 = get_target_image(scan, vp2, heading2, elevation2)
 
 
@@ -261,7 +287,7 @@ savedir = f"render_example/save/fitting/{scan}_{vp}_{heading}_{elevation}"
 plot_period = 100
 iter = trange(1000)
 losses = {
-    "image": {"weight": 1.0, "values": []},
+    "image1": {"weight": 1.0, "values": []},
     "image2": {"weight": 1.0, "values": []},
     "edge": {"weight": 0.1, "values": []},
     "normal": {"weight": 0.1, "values": []},
@@ -269,21 +295,27 @@ losses = {
     "sparsity": {"weight": 0.1, "values": []},
 }
 
-optimizer = torch.optim.AdamW([atlas], lr=1e-3, weight_decay=1e-4)
+optimizer = torch.optim.AdamW(
+    [comb_atlas],
+    lr=1e-3,
+    weight_decay=1e-4,
+)
 # optimizer = torch.optim.SGD([deform_verts, atlas], lr=0.01, momentum=0.9)
 for i in iter:
+    # check if the mesh's texture is modified
     optimizer.zero_grad()
-    new_mesh = mesh.offset_verts(deform_verts)
-    image = renderer(new_mesh)
-    image2 = renderer2(new_mesh)
+    # new_mesh = mesh.offset_verts(deform_verts)
+    # TODO how to remove the mem of mesh 1 but still keep the grad
+    # meshes = meshes[0].extend(2)
+    images = renderer(meshes, cameras=cameras)
+    # image2 = renderer2(new_mesh)
     loss = {k: torch.tensor(0.0, device=device) for k in losses}
     # update_mesh_shape_prior_losses(new_mesh, loss)
     # loss["sparsity"] = torch.norm(deform_verts, p=1)
     # compute mse
-    loss["image"] = mse_loss(image.squeeze()[..., :3], target_image, reduction="mean")
-    loss["image2"] = mse_loss(
-        image2.squeeze()[..., :3], target_image2, reduction="mean"
-    )
+
+    loss["image1"] = mse_loss(images[0, ..., :3], target_image1, reduction="mean")
+    loss["image2"] = mse_loss(images[1, ..., :3], target_image2, reduction="mean")
 
     sum_loss = torch.tensor(0.0, device=device)
     for k, l in loss.items():
@@ -295,16 +327,16 @@ for i in iter:
 
     if i % plot_period == 0:
         visualize_prediction(
-            image,
+            images[0],
             # new_mesh,
             title="iter: %d image1" % i,
             # renderer=renderer,
-            target_image=target_image,
+            target_image=target_image1,
             save_dir=savedir,
         )
 
         visualize_prediction(
-            image2,
+            images[1],
             # new_mesh,
             title="iter: %d image2" % i,
             # renderer=renderer,
@@ -312,6 +344,10 @@ for i in iter:
             save_dir=savedir,
         )
     sum_loss.backward()
+    # TODO combine the gradient of two atlas to a single one
+    # meshes[0].textures.atlas_packed().grad += meshes[1].textures.atlas_packed().grad
+    # meshes[1].textures.atlas_packed().grad = meshes[0].textures.atlas_packed().grad
+
     optimizer.step()
     # if i % 10 == 0:
 

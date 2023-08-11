@@ -52,6 +52,7 @@ _C.MP3D.VIEWPOINT_SIZE = 36
 _C.SAVE = CN()
 _C.SAVE.IMAGE_DIR = ""
 _C.SAVE.VAL_UNSEEN_POSE = ""
+_C.SAVE.VAL_SEEN_POSE = ""
 
 
 def get_cfg_defaults():
