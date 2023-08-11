@@ -29,10 +29,15 @@ from render.utils import get_device, get_viewpoint_info, load_viewpoints_dict
 
 
 def compare_two_mesh(
-    mesh1, mesh2, renderer, save_dir="render_example/save/tmp", save=False
+    mesh1,
+    mesh2,
+    renderer,
+    raster_settings=[],
+    save_dir="render_example/save/tmp",
+    save=False,
 ):
     plt.figure(figsize=(20, 10))
-    img1 = renderer(mesh1)
+    img1 = renderer(mesh1, raster_settings=raster_settings[0])
     # img2 = renderer(mesh2)
     ori_img = img1.clone()
     ori_img = ori_img[0, ..., :3].cpu().detach().numpy()
@@ -40,12 +45,13 @@ def compare_two_mesh(
     plt.title("ori")
     plt.imshow(ori_img)
 
-    # plt.subplot(1, 2, 2)
-    # clip_img = img2.clone()
-    # clip_img = clip_img[0, ..., :3].cpu().detach().numpy()
-    # plt.imshow(clip_img)
-    # plt.title("clip")
-    # plt.axis("off")
+    plt.subplot(1, 2, 2)
+    img2 = renderer(mesh2, raster_settings=raster_settings[1])
+    clip_img = img2.clone()
+    clip_img = clip_img[0, ..., :3].cpu().detach().numpy()
+    plt.imshow(clip_img)
+    plt.title("clip")
+    plt.axis("off")
     plt.savefig(f"{save_dir}/compare.png")
 
 
@@ -85,9 +91,9 @@ _, _, scan_to_vps_to_data = load_viewpoints_dict(cfg.DATA.CONNECTIVITY_DIR)
 
 scan = scan_ids[-3]
 test_render_set = scan2vpspose[scan]
-vp = test_render_set[0]["vp"]
-heading = test_render_set[0]["heading"]
-elevation = test_render_set[0]["elevation"]
+vp = test_render_set[1]["vp"]
+heading = test_render_set[1]["heading"]
+elevation = test_render_set[1]["elevation"]
 
 device = get_device()
 mesh_data = load_meshes(
@@ -119,86 +125,123 @@ raster_settings = RasterizationSettings(
     # cull_to_frustum=True,
 )
 
+raster_settings2 = RasterizationSettings(
+    image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
+    blur_radius=0.0,
+    faces_per_pixel=1,
+    cull_to_frustum=True,
+    z_clip_value=0.001
+    # cull_backfaces=True,
+)
+
 # set lights
-ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=True)
+ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=False)
 light = AmbientLights(device=device, ambient_color=ambient_color[None, :])
 # set up renderer and intial view
 pose = viewpoint_info["pose"]
 render_params = get_render_params(
     pose,
-    heading,
-    elevation,
+    [heading],
+    [elevation],
     raster_settings=raster_settings,
     cfg=cfg,
     device=device,
 )
 # get renderer
-camera = render_params["camera"]
+camera = render_params["cameras"]
 raster_settings = render_params["raster_settings"]
 device = render_params["device"]
 light = render_params["light"]
 
+rasterizer = MeshRasterizer(cameras=camera, raster_settings=raster_settings)
+
 renderer = MeshRenderer(
-    rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings),
+    rasterizer=rasterizer,
     shader=HardPhongShader(device=device, cameras=camera, lights=light),
 )
+# renderer2 = MeshRenderer(
+#     rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings2),
+#     shader=HardPhongShader(device=device, cameras=camera, lights=light),
+# )
 # -------------------------------------------
 # set up frustum
-# fov_y = cfg.CAMERA.HFOV
-# fov_x = cfg.CAMERA.VFOV
-# near = 0
-# far = 100
-# left = -1
-# right = 1
-# top = -1
-# bottom = 1
-# z_clip_value = 0.1
-# cull = True
-# perspective_correct = True
+# * 1300mb at this point
+fov_y = cfg.CAMERA.HFOV
+fov_x = cfg.CAMERA.VFOV
+near = 0
+far = 1000
+left = -1
+right = 1
+top = -1
+bottom = 1
+z_clip_value = 0.1
+cull = True
+perspective_correct = True
 
-# clip_frustum = ClipFrustum(
-#     left=left,
-#     right=right,
-#     top=top,
-#     bottom=bottom,
-#     znear=near,
-#     zfar=far,
-#     cull=cull,
-#     perspective_correct=perspective_correct,
-#     z_clip_value=z_clip_value,
-# )
+clip_frustum = ClipFrustum(
+    left=left,
+    right=right,
+    top=top,
+    bottom=bottom,
+    # znear=near,
+    # zfar=far,
+    cull=cull,
+    # perspective_correct=perspective_correct,
+    z_clip_value=z_clip_value,
+)
 # # -------------------------------------------
 
 # _, _, texture = mesh_data[scan]  # (V, 3), (F, 3)
 
-# face_packed = mesh.faces_packed()
-# verts_packed = mesh.verts_packed()
-# face_verts = verts_packed[face_packed]
+# mesh2 = mesh.clone().detach()
+
+mesh = rasterizer.transform(mesh)
+face_packed = mesh.faces_packed()
+verts_packed = mesh.verts_packed()
+face_verts = verts_packed[face_packed]
+num_faces_per_mesh = mesh.num_faces_per_mesh()
+mesh_to_face_first_idx = mesh.mesh_to_faces_packed_first_idx()
+
+clipped_faces = clip_faces(
+    face_verts, mesh_to_face_first_idx, num_faces_per_mesh, clip_frustum
+)
 
 
-# num_faces_per_mesh = mesh.num_faces_per_mesh()
-# mesh_to_face_first_idx = mesh.mesh_to_faces_packed_first_idx()
+clip_face_to_verts = torch.index_select(face_packed, 0, clipped_faces.faces_clipped_to_unclipped_idx)  # type: ignore
+print(f"original texture atlas shape: {face_packed.shape}")
 
-# clipped_faces = clip_faces(
-#     face_verts, mesh_to_face_first_idx, num_faces_per_mesh, clip_frustum
-# )
+texture = mesh.textures
+clipped_texture = torch.index_select(texture.atlas_packed(), 0, clipped_faces.faces_clipped_to_unclipped_idx)  # type: ignore
 
+clipped_atlas = TexturesAtlas(atlas=clipped_texture.unsqueeze(0))
 
-# clip_face_to_verts = torch.index_select(face_packed, 0, clipped_faces.faces_clipped_to_unclipped_idx)  # type: ignore
-# print(f"original texture atlas shape: {texture.atlas_packed().shape}")
-# clipped_texture = torch.index_select(texture.atlas_packed(), 0, clipped_faces.faces_clipped_to_unclipped_idx)  # type: ignore
+print(
+    f"verts packed shape{str(verts_packed.shape):>40}\nclipped face to verts:{str(clip_face_to_verts.shape):>40}"
+)
 
-# clipped_atlas = TexturesAtlas(atlas=clipped_texture.unsqueeze(0))
+# inverse the ndc to world
+P = cameras.get_projection_transform().get_matrix()
+C = cameras.get_camera_center()
 
-# print(
-#     f"verts packed shape{str(verts_packed.shape):>40}\nclipped face to verts:{str(clip_face_to_verts.shape):>40}"
-# )
+# Compute the inverse transformation matrices
+P_inv = torch.inverse(P)
+C_inv = torch.inverse(C)
 
-# clipped_mesh = Meshes(
-#     verts=verts_packed.unsqueeze(0),
-#     faces=clip_face_to_verts.unsqueeze(0),
-#     textures=clipped_atlas,
-# )
+# Apply the inverse transformations to the NDC coordinates
+verts_camera_space = torch.matmul(verts_ndc_space, P_inv)
+verts_world_space = torch.matmul(verts_camera_space, C_inv)
 
+clipped_mesh = Meshes(
+    verts=verts_packed.unsqueeze(0),
+    faces=clip_face_to_verts.unsqueeze(0),
+    textures=clipped_atlas,
+)
 
-compare_two_mesh(mesh, mesh, renderer, save=True)
+# *2200mb at this point, clipped_mesh is 900mb.
+compare_two_mesh(
+    mesh,
+    clipped_mesh,
+    renderer,
+    raster_settings=[raster_settings, raster_settings],
+    save=True,
+)
