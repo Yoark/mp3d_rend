@@ -175,7 +175,7 @@ atlas = atlas.to(device)
 verts = verts.to(device)
 faces = faces.to(device)
 # atlas = Parameter(atlas)
-# atlas.requires_grad = True
+atlas.requires_grad_(True)
 # atlas2 = atlas.clone()
 # atlas = torch.nn.Parameter(atlas, requires_grad=True)
 # textures = TexturesAtlas(atlas=atlas)
@@ -196,15 +196,16 @@ faces = faces.to(device)
 # meshes.textures = TexturesAtlas(atlas=atlas_packed)
 # meshes = [mesh] * 2
 # * testing different methods for combining a mesh
-verts = [verts, verts.clone().detach()]
-faces = [faces, faces.clone().detach()]
+verts_expands = verts.expand(2, -1, -1)
+faces_expands = faces.expand(2, -1, -1)
 # textures = TexturesAtlas(atlas=torch.cat([atlas, atlas2], dim=0))
-comb_atlas = torch.cat([atlas, atlas], dim=0)
-comb_atlas = torch.nn.Parameter(comb_atlas, requires_grad=True)
-textures = TexturesAtlas(atlas=comb_atlas)
+atlas_expand = atlas.expand(2, -1, -1, -1, -1)
+# comb_atlas = torch.nn.Parameter(atlas_expand, requires_grad=True)
+textures = TexturesAtlas(atlas=atlas_expand)
+atlas_expand.retain_grad()
 meshes = Meshes(
-    verts=verts,
-    faces=faces,
+    verts=verts_expands,
+    faces=faces_expands,
     textures=textures,
 )
 # N = verts.shape[0]
@@ -285,7 +286,7 @@ os.makedirs("render_example/save/fitting", exist_ok=True)
 savedir = f"render_example/save/fitting/{scan}_{vp}_{heading}_{elevation}"
 
 plot_period = 100
-iter = trange(1000)
+iter = trange(2000)
 losses = {
     "image1": {"weight": 1.0, "values": []},
     "image2": {"weight": 1.0, "values": []},
@@ -296,7 +297,7 @@ losses = {
 }
 
 optimizer = torch.optim.AdamW(
-    [comb_atlas],
+    [atlas],
     lr=1e-3,
     weight_decay=1e-4,
 )
