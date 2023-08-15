@@ -7,3 +7,4 @@ __pycache__/
 **/save/*
 __pycache__/
 **/**/__pycache__
+**/**/*.svg

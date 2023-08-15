@@ -7,6 +7,7 @@ import resource
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torchviz
 from PIL import Image
 from pytorch3d.loss import (
     chamfer_distance,
@@ -148,15 +149,20 @@ vp2 = test_render_set[1]["vp"]
 heading2 = test_render_set[1]["heading"]
 elevation2 = test_render_set[1]["elevation"]
 
-headings = [heading, heading2]
-elevations = [elevation, elevation2]
+# load third goal image
+vp3 = test_render_set[2]["vp"]
+heading3 = test_render_set[2]["heading"]
+elevation3 = test_render_set[2]["elevation"]
+
+headings = [heading, heading2, heading3]
+elevations = [elevation, elevation2, elevation3]
 
 device = get_device()
 mesh_data = load_meshes(
     [scan],
     mesh_dir=cfg.DATA.MESH_DIR,
     device=device,
-    texture_atlas_size=5,
+    texture_atlas_size=5,  #! it is 5 here
     with_atlas=False,
 )
 viewpoint_info = get_viewpoint_info(scan, vp, scan_to_vps_to_data)
@@ -174,33 +180,12 @@ if atlas.ndim == 4:
 atlas = atlas.to(device)
 verts = verts.to(device)
 faces = faces.to(device)
-# atlas = Parameter(atlas)
 atlas.requires_grad_(True)
-# atlas2 = atlas.clone()
-# atlas = torch.nn.Parameter(atlas, requires_grad=True)
-# textures = TexturesAtlas(atlas=atlas)
-# textures2 = TexturesAtlas(atlas=atlas2)
-# verts.requires_grad = True
-# verts = Parameter(verts)
-# textures = Parameter(textures)
-# mesh = Meshes(
-#     verts=[verts],
-#     faces=[faces],
-#     textures=textures,
-# )
 
-# meshes = mesh.extend(2)
-
-# atlas = meshes[0].textures.atlas_packed().clone().detach()
-# atlas_packed.requires_grad = True
-# meshes.textures = TexturesAtlas(atlas=atlas_packed)
-# meshes = [mesh] * 2
 # * testing different methods for combining a mesh
-verts_expands = verts.expand(2, -1, -1)
-faces_expands = faces.expand(2, -1, -1)
-# textures = TexturesAtlas(atlas=torch.cat([atlas, atlas2], dim=0))
-atlas_expand = atlas.expand(2, -1, -1, -1, -1)
-# comb_atlas = torch.nn.Parameter(atlas_expand, requires_grad=True)
+verts_expands = verts.expand(3, -1, -1)
+faces_expands = faces.expand(3, -1, -1)
+atlas_expand = atlas.expand(3, -1, -1, -1, -1)
 textures = TexturesAtlas(atlas=atlas_expand)
 atlas_expand.retain_grad()
 meshes = Meshes(
@@ -216,6 +201,7 @@ meshes = Meshes(
 # current render heading and elev
 print(f"first goal {scan}, {vp}, {heading}, {elevation}")
 print(f"second goal {scan}, {vp2}, {heading2}, {elevation2}")
+print(f"third goal {scan}, {vp3}, {heading3}, {elevation3}")
 # display target image.
 # read_image(scan, vp, heading, elevation)
 
@@ -243,15 +229,6 @@ render_params = get_render_params(
     device=device,
 )
 
-# get render params for second goal
-# render_params2 = get_render_params(
-#     pose,
-#     heading2,
-#     elevation2,
-#     raster_settings=raster_settings,
-#     cfg=cfg,
-#     device=device,
-# )
 # get renderer
 cameras = render_params["cameras"]
 raster_settings = render_params["raster_settings"]
@@ -265,11 +242,6 @@ renderer = MeshRenderer(
     rasterizer=MeshRasterizer(raster_settings=raster_settings),
     shader=SoftPhongShader(device=device, lights=light),
 )
-# set up renderer2 this is temporary
-# renderer2 = MeshRenderer(
-#     rasterizer=MeshRasterizer(cameras=camera2, raster_settings=raster_settings),
-#     shader=SoftPhongShader(device=device, cameras=camera2, lights=light),
-# )
 
 
 def get_target_image(scan, vp, heading, elevation, normalize=True):
@@ -280,6 +252,7 @@ def get_target_image(scan, vp, heading, elevation, normalize=True):
 
 target_image1 = get_target_image(scan, vp, heading, elevation)
 target_image2 = get_target_image(scan, vp2, heading2, elevation2)
+target_image3 = get_target_image(scan, vp3, heading3, elevation3)
 
 
 os.makedirs("render_example/save/fitting", exist_ok=True)
@@ -290,6 +263,7 @@ iter = trange(2000)
 losses = {
     "image1": {"weight": 1.0, "values": []},
     "image2": {"weight": 1.0, "values": []},
+    "image3": {"weight": 1.0, "values": []},
     "edge": {"weight": 0.1, "values": []},
     "normal": {"weight": 0.1, "values": []},
     "laplacian": {"weight": 0.1, "values": []},
@@ -317,6 +291,7 @@ for i in iter:
 
     loss["image1"] = mse_loss(images[0, ..., :3], target_image1, reduction="mean")
     loss["image2"] = mse_loss(images[1, ..., :3], target_image2, reduction="mean")
+    loss["image3"] = mse_loss(images[2, ..., :3], target_image3, reduction="mean")
 
     sum_loss = torch.tensor(0.0, device=device)
     for k, l in loss.items():
@@ -324,6 +299,7 @@ for i in iter:
         # TODO here!
         losses[k]["values"].append(l.item())
 
+    # torchviz.make_dot(sum_loss)
     iter.set_description(f"loss: {sum_loss.item()}")
 
     if i % plot_period == 0:
@@ -342,6 +318,14 @@ for i in iter:
             title="iter: %d image2" % i,
             # renderer=renderer,
             target_image=target_image2,
+            save_dir=savedir,
+        )
+        visualize_prediction(
+            images[2],
+            # new_mesh,
+            title="iter: %d image3" % i,
+            # renderer=renderer,
+            target_image=target_image3,
             save_dir=savedir,
         )
     sum_loss.backward()

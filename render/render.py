@@ -357,8 +357,6 @@ def get_mesh_renderer(cfg, scan):
     # atlas = Parameter(atlas)
     # atlas.requires_grad = True
     textures = TexturesAtlas(atlas=atlas)
-    # verts.requires_grad = True
-    # verts = Parameter(verts)
     # textures = Parameter(textures)
     mesh = Meshes(
         verts=[verts],
