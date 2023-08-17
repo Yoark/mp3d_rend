@@ -60,3 +60,7 @@ def get_cfg_defaults():
 
 
 cfg = _C
+
+# Note on coordinate systems in pytorch3d
+# woorld and camera view, ndc system: x left, y up, z inward
+# screen: top left is (0, 0), bottom right is (W, H)
