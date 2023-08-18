@@ -4,6 +4,7 @@ import json
 import os
 import resource
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -146,7 +147,7 @@ raster_settings = RasterizationSettings(
     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
     blur_radius=0.0,
     faces_per_pixel=1,
-    cull_to_frustum=True,
+    cull_to_frustum=False,
     # cull_to_frustum=True,
 )
 
@@ -187,6 +188,11 @@ renderer = MeshRenderer(
 
 images = renderer(meshes, cameras=camera)
 print(images.shape)
+images = images[..., :3].cpu().detach().numpy()
+for i, image in enumerate(images):
+    plt.imsave(f"render_example/save/tmp/nocull{i}.png", image)
+
+
 # renderer2 = MeshRenderer(
 #     rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings2),
 #     shader=HardPhongShader(device=device, cameras=camera, lights=light),
