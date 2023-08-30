@@ -8,4 +8,4 @@ SAVE:
   VAL_UNSEEN_POSE: render_example/save/poses
   VAL_SEEN_POSE: render_example/save/poses
 MESH:
-  TEXTURE_ATLAS_SIZE: 20
+  TEXTURE_ATLAS_SIZE: 5

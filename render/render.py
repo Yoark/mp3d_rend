@@ -21,7 +21,7 @@ from scipy.spatial.transform import Rotation
 from sympy import Union
 from yacs.config import CfgNode
 
-from render.utils import get_obj_paths
+from render.utils import get_device, get_obj_paths
 
 # DONE (zijiao): use config file rather than hard-coded parameters
 # setting up the correct meta parameters
@@ -368,7 +368,8 @@ def get_mesh_renderer(cfg, scan):
     raster_settings = RasterizationSettings(
         image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
         blur_radius=0.0,
-        faces_per_pixel=5,
+        faces_per_pixel=1,
+        cull_to_frustum=True,
     )
 
     # set lights
@@ -384,11 +385,15 @@ def get_mesh_renderer(cfg, scan):
 
 def get_camera(cfg, eye, heading, elevation, **kwargs):
     device = kwargs.get("device", "cpu")
-    at = [eye[0], eye[1] + 1, eye[2]]
+    x, y, z = eye.x, eye.y, eye.z
+    at = [x, y + 1, z]
     up = [0, 0, 1]
-    eye_r, at_r, up_r = rotate_heading_elevation(eye, at, up, heading, elevation)
+    import ipdb
+
+    # ipdb.set_trace()
+    eye_r, at_r, up_r = rotate_heading_elevation((x, y, z), at, up, heading, elevation)
     # init camera
-    R, T = look_at_view_transform(eye=[eye_r], up=[up_r], at=[at_r])
+    R, T = look_at_view_transform(eye=eye_r, up=up_r, at=at_r)
     # R = R.requires_grad_(require_grad)
     # T = T.requires_grad_(require_grad)
     camera = FoVPerspectiveCameras(

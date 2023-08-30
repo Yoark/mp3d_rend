@@ -3,6 +3,7 @@
 import json
 import os
 import resource
+import sys
 
 import cv2
 import matplotlib.pyplot as plt
@@ -23,6 +24,7 @@ from pytorch3d.renderer.mesh.clip import ClipFrustum, clip_faces
 from pytorch3d.renderer.mesh.textures import TexturesAtlas
 from pytorch3d.structures import Meshes
 from pytorch3d.vis.plotly_vis import AxisArgs, plot_batch_individually, plot_scene
+from torch.profiler import ProfilerActivity, profile, record_function
 
 from render.config import cfg
 from render.render import get_render_params, init_episode, load_meshes
@@ -112,7 +114,6 @@ for view in test_render_set[:batch_size]:
     elevations.append(view["elevation"])
 
 device = get_device()
-
 mesh_data = load_meshes(
     [scan],
     mesh_dir=cfg.DATA.MESH_DIR,
@@ -142,56 +143,117 @@ meshes = Meshes(
     faces=faces_rep,
     textures=textures,
 )
-# -------------------------------------------
-raster_settings = RasterizationSettings(
-    image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
-    blur_radius=0.0,
-    faces_per_pixel=1,
-    cull_to_frustum=False,
-    # cull_to_frustum=True,
-)
-
-# raster_settings2 = RasterizationSettings(
-#     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
-#     blur_radius=0.0,
-#     faces_per_pixel=1,
-#     cull_to_frustum=True,
-#     z_clip_value=0.001
-#     # cull_backfaces=True,
-# )
-
-# set lights
 ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=False)
 light = AmbientLights(device=device, ambient_color=ambient_color[None, :])
 # set up renderer and intial view
 pose = viewpoint_info["pose"]
-render_params = get_render_params(
-    pose,
-    headings,
-    elevations,
-    raster_settings=raster_settings,
-    cfg=cfg,
-    device=device,
-)
-# get renderer
-camera = render_params["cameras"]
-raster_settings = render_params["raster_settings"]
-device = render_params["device"]
-light = render_params["light"]
 
-rasterizer = MeshRasterizer(raster_settings=raster_settings)
 
-renderer = MeshRenderer(
-    rasterizer=rasterizer,
-    shader=SoftPhongShader(device=device, lights=light),
-)
+# -------------------------------------------
+def render_mesh(cull_to_frustum=True):
+    raster_settings = RasterizationSettings(
+        image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
+        blur_radius=0.0,
+        faces_per_pixel=1,
+        cull_to_frustum=cull_to_frustum,
+        # cull_to_frustum=True,
+    )
 
-images = renderer(meshes, cameras=camera)
-print(images.shape)
-images = images[..., :3].cpu().detach().numpy()
-for i, image in enumerate(images):
-    plt.imsave(f"render_example/save/tmp/nocull{i}.png", image)
+    # raster_settings2 = RasterizationSettings(
+    #     image_size=((cfg.CAMERA.HEIGHT, cfg.CAMERA.WIDTH)),
+    #     blur_radius=0.0,
+    #     faces_per_pixel=1,
+    #     cull_to_frustum=True,
+    #     z_clip_value=0.001
+    #     # cull_backfaces=True,
+    # )
 
+    # set lights
+
+    render_params = get_render_params(
+        pose,
+        headings,
+        elevations,
+        raster_settings=raster_settings,
+        cfg=cfg,
+        device=device,
+    )
+    # get renderer
+    camera = render_params["cameras"]
+    raster_settings = render_params["raster_settings"]
+    # device = render_params["device"]
+    light = render_params["light"]
+
+    rasterizer = MeshRasterizer(raster_settings=raster_settings)
+
+    renderer = MeshRenderer(
+        rasterizer=rasterizer,
+        shader=SoftPhongShader(device=device, lights=light),
+    )
+
+    initial_memory_allocated = torch.cuda.memory_allocated()
+    initial_memory_reserved = torch.cuda.memory_reserved()
+
+    images = renderer(meshes, cameras=camera)
+
+    end_memory_allocated = torch.cuda.memory_allocated()
+    end_initial_memory_reserved = torch.cuda.memory_reserved()
+    print(
+        f"memory allocated: {(end_memory_allocated - initial_memory_allocated)/1024**2} MB"
+    )
+    print(
+        f"memory reserved: {(end_initial_memory_reserved - initial_memory_reserved)/1024**2} MB"
+    )
+
+
+# * save image
+# print(images.shape)
+# images = images[..., :3].cpu().detach().numpy()
+# for i, image in enumerate(images):
+#     plt.imsave(f"render_example/save/tmp/nocull{i}.png", image)
+
+
+# Open a file in write mode
+def profile_memory(**kwargs):
+    with profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
+        with_flops=True,
+    ) as prof:
+        cull_to_frustum = kwargs.get("cull_to_frustum", True)
+        render_mesh(cull_to_frustum=cull_to_frustum)
+
+    filename = kwargs.get("filename", "")
+    with open(
+        f"render_example/save/profiles/{filename}_profile_result.txt", "w"
+    ) as file:
+        # Redirect standard output to the file
+        original_stdout = sys.stdout
+        sys.stdout = file
+        total_memory_usage = sum(
+            [event.cuda_memory_usage for event in prof.key_averages()]
+        )
+
+        # Print the table using pprint
+        print(
+            prof.key_averages().table(
+                sort_by="cuda_memory_usage", row_limit=20, top_level_events_only=True
+            )
+        )
+        print(
+            "Total CUDA Memory Usage: {:.2f} MB".format(
+                total_memory_usage / (1024**2)
+            )
+        )
+
+        # Restore standard output to its original state
+        sys.stdout = original_stdout
+
+
+profile_memory(filename="cull", cull_to_frustum=True)
+profile_memory(filename="nocull", cull_to_frustum=False)
 
 # renderer2 = MeshRenderer(
 #     rasterizer=MeshRasterizer(cameras=camera, raster_settings=raster_settings2),
@@ -299,3 +361,9 @@ for i, image in enumerate(images):
 #     raster_settings=[raster_settings, raster_settings],
 #     save=True,
 # )
+
+# TEST cull on cpu and push to gpu for rendering
+# %%
+print(1)
+# %%
+# test cull on cpu and push to gpu for rendering

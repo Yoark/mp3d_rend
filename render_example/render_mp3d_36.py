@@ -2,6 +2,7 @@ import json
 import os
 
 import h5py
+import ipdb
 import MatterSim
 import numpy as np
 import torch
@@ -29,16 +30,16 @@ print(configs)
 connectivity_dir = configs.DATA.CONNECTIVITY_DIR
 scan_dir = configs.DATA.MESH_DIR
 image_dir = configs.DATA.MATTERPORT_IMAGE_DIR
-val_unseen_dir = configs.DATA.RXR.VAL_UNSEEN
+# val_unseen_dir = configs.DATA.RXR.VAL_UNSEEN
 
 # load rxr_val_unseen_guide.jsonl.gz
-rxr_val_unseen = read_gz_jsonlines(val_unseen_dir)
+# rxr_val_unseen = read_gz_jsonlines(val_unseen_dir)
 
-scan_vps = set()
-for item in rxr_val_unseen:
-    scan = item["scan"]
-    viewpoints = item["path"]
-    scan_vps.update([(scan, vp) for vp in viewpoints])
+# scan_vps = set()
+# for item in rxr_val_unseen:
+#     scan = item["scan"]
+#     viewpoints = item["path"]
+#     scan_vps.update([(scan, vp) for vp in viewpoints])
 
 sim = build_simulator(connectivity_dir, image_dir)
 
@@ -58,11 +59,14 @@ save_folder = create_folder(image_folder)
 #     scan_vps = list(scan_vps)
 
 
+scan_vps = [("1pXnuDYAj8r", "49b4f59afc74417d846ad8cf1634e3d8")]
 scan_vp_cam_poses = []
 
 pbar = tqdm.tqdm(scan_vps, desc="Progress of scans:")
 
 for scan, vp in pbar:
+    renderer, mesh = get_mesh_renderer(configs, scan)
+    ipdb.set_trace()
     for ix in range(configs.MP3D.VIEWPOINT_SIZE):
         if ix == 0:
             sim.newEpisode([scan], [vp], [0], [np.deg2rad(-30)])
@@ -74,9 +78,14 @@ for scan, vp in pbar:
         assert state.viewIndex == ix
 
         # save the rgb as image here for checking
-        renderer, mesh = get_mesh_renderer(configs, scan)
-        camera = get_camera(configs, state.location, state.heading, state.elevation)
+        # ipdb.set_trace()
+
+        camera = get_camera(
+            configs, state.location, state.heading, state.elevation, device=device
+        )
         image = renderer(mesh, cameras=camera)
+        print(ix)
+        ipdb.set_trace()
         image = image[0, ..., :3]
         # feature extractor?
 

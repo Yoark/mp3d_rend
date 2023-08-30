@@ -27,13 +27,16 @@ def read_gz_jsonlines(filename):
     return data
 
 
-def get_device() -> torch.device:
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        torch.cuda.set_device(device)
+def get_device(get_cpu=False) -> torch.device:
+    if get_cpu:
+        return torch.device("cpu")
     else:
-        device = torch.device("cpu")
-    return device
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+            torch.cuda.set_device(device)
+        else:
+            device = torch.device("cpu")
+        return device
 
 
 def load_viewpoints_dict(conn: str) -> Tuple[Dict[str, List], int, Dict[str, Dict]]:
