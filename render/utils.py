@@ -111,3 +111,15 @@ def build_feature_extractor(model_name, checkpoint_file=None, device="cpu"):
     img_transforms = create_transform(**config)
 
     return model, img_transforms
+
+
+def read_image(scan, vp, heading, elevation, display=False):
+    # find image and display for compare
+    img_path = os.path.join(
+        cfg.SAVE.IMAGE_DIR, scan, f"{scan}_{vp}_{heading}_{elevation}.png"
+    )
+    img = Image.open(img_path)
+    print("Image size:", img.size)
+    if display:
+        img.show()
+    return img

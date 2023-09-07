@@ -7,15 +7,17 @@ _C = CN()
 _C.TEST = False
 
 _C.DATA = CN()
-_C.DATA.MESH_DIR = "/mnt/sw/vln/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
-_C.DATA.MATTERPORT_IMAGE_DIR = "/mnt/sw/vln/data/matterport3d/v1/scans"
-_C.DATA.CONNECTIVITY_DIR = "/mnt/sw/vln/data/matterport3d/connectivity"
-_C.DATA.RXR_DIR = "/mnt/sw/vln/data/RxR/rxr_train_guide.jsonl.gz"
+_C.DATA.MESH_DIR = (
+    "/mnt/sw/data/vln/traj/data/matterport3d/mp3d_mesh/v1/scans/{}/matterport_mesh"
+)
+_C.DATA.MATTERPORT_IMAGE_DIR = "/mnt/sw/data/vln/traj/data/matterport3d/v1/scans"
+_C.DATA.CONNECTIVITY_DIR = "/mnt/sw/data/vln/traj/data/matterport3d/connectivity"
+_C.DATA.RXR_DIR = "/mnt/sw/data/vln/traj/data/RxR/rxr_train_guide.jsonl.gz"
 
 _C.DATA.RXR = CN()
-_C.DATA.RXR.TRAIN = "/mnt/sw/vln/data/RxR/rxr_train_guide.jsonl.gz"
-_C.DATA.RXR.VAL_UNSEEN = "/mnt/sw/vln/data/RxR/rxr_val_unseen_guide.jsonl.gz"
-_C.DATA.RXR.VAL_SEEN = "/mnt/sw/vln/data/RxR/rxr_val_seen_guide.jsonl.gz"
+_C.DATA.RXR.TRAIN = "/mnt/sw/data/vln/traj/data/RxR/rxr_train_guide.jsonl.gz"
+_C.DATA.RXR.VAL_UNSEEN = "/mnt/sw/data/vln/traj/data/RxR/rxr_val_unseen_guide.jsonl.gz"
+_C.DATA.RXR.VAL_SEEN = "/mnt/sw/data/vln/traj/data/RxR/rxr_val_seen_guide.jsonl.gz"
 
 _C.DATA.POSE = ""
 

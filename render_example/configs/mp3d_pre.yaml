@@ -4,8 +4,8 @@ DATA:
   POSE: render_example/save/poses/val_unseen_scan2vpspose.json
 TEST: True
 SAVE:
-  IMAGE_DIR: render_example/save/images
+  IMAGE_DIR: render_example/save/test_rend
   VAL_UNSEEN_POSE: render_example/save/poses
   VAL_SEEN_POSE: render_example/save/poses
 MESH:
-  TEXTURE_ATLAS_SIZE: 40
+  TEXTURE_ATLAS_SIZE: 20

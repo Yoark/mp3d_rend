@@ -288,7 +288,7 @@ def get_render_params(
         ),
     )
     device = kwargs.get("device", "cpu")
-    eye = [pose[3], pose[7], pose[11]]  # location
+    eye = [pose[0], pose[1], pose[2]]  # location
     at = [eye[0], eye[1] + 1, eye[2]]
     up = [0, 0, 1]
     headings = np.array(headings).reshape(-1, 1)
@@ -335,8 +335,8 @@ class CameraData:
         self.up = [0, 0, 1]
 
 
-def get_mesh_renderer(cfg, scan):
-    cfg.merge_from_file("render_example/configs/mp3d_render.yaml")
+def get_mesh_renderer(cfg, scan, expand=False):
+    # cfg.merge_from_file("render_example/configs/mp3d_render.yaml")
     device = get_device()
 
     mesh_data = load_meshes(
@@ -348,19 +348,27 @@ def get_mesh_renderer(cfg, scan):
     )
     verts, faces, aux = mesh_data[scan]
     # create mesh
+    # # import ipdb
+
+    # ipdb.set_trace()
     atlas = aux.texture_atlas
     if atlas.ndim == 4:
         atlas = atlas.unsqueeze(0)
-    atlas = atlas.to(device)
-    verts = verts.to(device)
-    faces = faces.to(device)
+    if expand:
+        atlas = atlas.expand(expand, -1, -1, -1, -1).to(device)
+        verts = verts.expand(expand, -1, -1).to(device)
+        faces = faces.expand(expand, -1, -1).to(device)
+    else:
+        atlas = atlas.to(device)
+        verts = verts.unsqueeze(0).to(device)
+        faces = faces.unsqueeze(0).to(device)
     # atlas = Parameter(atlas)
     # atlas.requires_grad = True
     textures = TexturesAtlas(atlas=atlas)
     # textures = Parameter(textures)
     mesh = Meshes(
-        verts=[verts],
-        faces=[faces],
+        verts=verts,
+        faces=faces,
         textures=textures,
     )
 
@@ -388,7 +396,7 @@ def get_camera(cfg, eye, heading, elevation, **kwargs):
     x, y, z = eye.x, eye.y, eye.z
     at = [x, y + 1, z]
     up = [0, 0, 1]
-    import ipdb
+    # import ipdb
 
     # ipdb.set_trace()
     eye_r, at_r, up_r = rotate_heading_elevation((x, y, z), at, up, heading, elevation)
@@ -407,3 +415,42 @@ def get_camera(cfg, eye, heading, elevation, **kwargs):
         fov=60,  # cfg.CAMERA.HFOV,
     )
     return camera
+
+
+def get_mesh_data(cfg, scan, device):
+    mesh_data = load_meshes(
+        [scan],
+        mesh_dir=cfg.DATA.MESH_DIR,
+        device=device,
+        texture_atlas_size=cfg.MESH.TEXTURE_ATLAS_SIZE,
+        with_atlas=False,
+    )
+    verts, faces, aux = mesh_data[scan]
+    atlas = aux.texture_atlas
+    if atlas.ndim == 4:
+        atlas = atlas.unsqueeze(0)
+    return faces, verts, atlas
+
+
+def create_and_expand_mesh(faces, verts, atlas, expand_num, device=None):
+    atlas = atlas.expand(expand_num, -1, -1, -1, -1).to(device)
+    verts = verts.expand(expand_num, -1, -1).to(device)
+    faces = faces.expand(expand_num, -1, -1).to(device)
+
+    textures = TexturesAtlas(atlas=atlas)
+    # textures = Parameter(textures)
+    mesh = Meshes(
+        verts=verts,
+        faces=faces,
+        textures=textures,
+    )
+    return mesh
+
+
+def get_render(cfg, raster_settings, device, light, **kwargs):
+    # set lights
+    renderer = MeshRenderer(
+        rasterizer=MeshRasterizer(raster_settings=raster_settings),
+        shader=SoftPhongShader(device=device, lights=light),
+    )
+    return renderer
