@@ -1,8 +1,10 @@
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from PIL import Image
 
 # Util function for loading meshes
 from pytorch3d.io import load_obj

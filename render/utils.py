@@ -5,8 +5,10 @@ import pathlib
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
+import matplotlib.pyplot as plt
 import timm
 import torch
+from PIL import Image
 from timm.data import resolve_data_config
 from timm.data.transforms_factory import create_transform
 
@@ -113,13 +115,52 @@ def build_feature_extractor(model_name, checkpoint_file=None, device="cpu"):
     return model, img_transforms
 
 
-def read_image(scan, vp, heading, elevation, display=False):
+def read_image(scan, vp, heading, elevation, display=False, image_folder=""):
     # find image and display for compare
+    if not image_folder:
+        image_folder = (
+            "/home/zijiao/research/pytorch_rend/render_example/save/images/val_seen"
+        )
     img_path = os.path.join(
-        cfg.SAVE.IMAGE_DIR, scan, f"{scan}_{vp}_{heading}_{elevation}.png"
+        image_folder,
+        scan,
+        f"{scan}_{vp}_{heading}_{elevation}.png",
     )
     img = Image.open(img_path)
     print("Image size:", img.size)
     if display:
         img.show()
     return img
+
+
+def save_images_to_one(
+    images: List[torch.tensor],
+    # predicted_mesh=None,
+    # renderer=None,
+    title: List[str] = [],
+    filename: str = "",
+    save_dir: str = None,
+):
+    """generate a figure with image list and title list
+
+    Args:
+        images (List[torch.tensor]): images to be saved
+        title (List[str], optional): . Defaults to [].
+        save_dir (str, optional): save dir. Defaults to None.
+    """
+    # inds = 3
+
+    plt.figure(figsize=(20, 10))
+    plt.axis("off")
+
+    for i, image in enumerate(images):
+        # image = image[..., :inds].cpu().detach().numpy()
+        plt.subplot(1, len(images), i + 1)
+        plt.imshow(image)
+        plt.title(title[i])
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+        print(f"Created {save_dir}")
+    # title = "_".join(title)
+    plt.savefig(f"{save_dir}/{filename}.png")
