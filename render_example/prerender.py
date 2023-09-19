@@ -29,6 +29,18 @@ from render.utils import (
 )
 
 
+def load_viewpoint_ids(connectivity_dir):
+    viewpoint_ids = []
+    with open(os.path.join(connectivity_dir, "scans.txt")) as f:
+        scans = [x.strip() for x in f]
+    for scan in scans:
+        with open(os.path.join(connectivity_dir, "%s_connectivity.json" % scan)) as f:
+            data = json.load(f)
+            viewpoint_ids.extend([(scan, x["image_id"]) for x in data if x["included"]])
+    print("Loaded %d viewpoints" % len(viewpoint_ids))
+    return viewpoint_ids
+
+
 def main():
     # use MatterSim to initialize a view, make some actions (turn 360), render with pytorch3d
     configs = get_cfg_defaults()
@@ -49,6 +61,7 @@ def main():
     #     scan = item["scan"]
     #     viewpoints = item["path"]
     #     scan_vps.update([(scan, vp) for vp in viewpoints])
+    scan_vps = load_viewpoint_ids(connectivity_dir)
 
     sim = build_simulator(connectivity_dir, image_dir)
     device = get_device()
@@ -75,7 +88,7 @@ def main():
     ambient_color = torch.tensor([1.0, 1.0, 1.0], requires_grad=True)[None, :]
     light = AmbientLights(device=device, ambient_color=ambient_color)
 
-    scan_vps = [("1pXnuDYAj8r", "49b4f59afc74417d846ad8cf1634e3d8")]
+    # scan_vps = [("1pXnuDYAj8r", "49b4f59afc74417d846ad8cf1634e3d8")]
     scan_vp_cam_poses = []
 
     # get_render
@@ -91,7 +104,7 @@ def main():
         elevations = []
         locations = []
         ixs = []
-        scan_path = create_folder(os.path.join(save_folder, scan))
+        scanvp_path = create_folder(os.path.join(save_folder, scan, vp))
         faces, verts, atlas = get_mesh_data(configs, scan, device)
 
         for ix in range(configs.MP3D.VIEWPOINT_SIZE):
@@ -140,11 +153,14 @@ def main():
                 images = images[..., :3].cpu().detach().numpy()
 
                 for i, ix in enumerate(ixs):
-                    image_path = os.path.join(scan_path, f"{scan}_{vp}_{ix}.png")
+                    image_path = os.path.join(scanvp_path, f"{ix}.png")
                     image = images[i]
                     # Convert numpy array to PIL Image
-                    im = Image.fromarray((image * 255).astype(np.uint8))
+                    image_np = image.cpu().numpy()
+                    image_clipped = np.clip(image_np, 0, 1)
+                    image_uint8 = (image_clipped * 255).round().astype(np.uint8)
                     # Save the image
+                    im = Image.fromarray(image_uint8)
                     im.save(image_path)
                 headings = []
                 elevations = []
