@@ -1,0 +1,16 @@
+RENDER:
+  IMAGE_MODEL_NAME: vit_base_patch16_224
+DATA:
+  POSE: render_example/save/poses/val_unseen_scan2vpspose.json
+  CONNECTIVITY_DIR: /nfs/hpc/sw/zijiao/unitVLN/VLN-HAMT/datasets/R2R/connectivity
+  MESH_DIR: /nfs/hpc/sw_data/virl-common-datasets/mp3d-data/v1/scans/{}/matterport_mesh
+  MATTERPORT_IMAGE_DIR: /nfs/hpc/sw_data/virl-common-datasets/mp3d-data/v1/scans
+  RXR:
+    VAL_SEEN: /nfs/hpc/sw/zijiao/unitVLN/VLN-HAMT/datasets/RxR/annotations/rxr_val_seen_guide_enc_xlmr.jsonl
+TEST: True
+SAVE:
+  IMAGE_DIR: render_example/save/test_rend
+  VAL_UNSEEN_POSE: render_example/save/poses
+  VAL_SEEN_POSE: render_example/save/poses
+MESH:
+  TEXTURE_ATLAS_SIZE: 40

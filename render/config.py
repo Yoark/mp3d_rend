@@ -23,17 +23,17 @@ _C.DATA.POSE = ""
 
 
 _C.CAMERA = CN()
-_C.CAMERA.VFOV = 60
+_C.CAMERA.HFOV = 60
 _C.CAMERA.WIDTH = 640
 _C.CAMERA.HEIGHT = 480
 # _C.CAMERA.HFOV = _C.CAMERA.VFOV * _C.CAMERA.WIDTH / _C.CAMERA.HEIGHT
-_C.CAMERA.HFOV = math.degrees(
-    2
-    * math.atan(
-        math.tan(math.radians(_C.CAMERA.VFOV) / 2)
-        * (_C.CAMERA.WIDTH / _C.CAMERA.HEIGHT)
-    )
-)
+# _C.CAMERA.HFOV = math.degrees(
+#     2
+#     * math.atan(
+#         math.tan(math.radians(_C.CAMERA.VFOV) / 2)
+#         * (_C.CAMERA.WIDTH / _C.CAMERA.HEIGHT)
+#     )
+# )
 
 _C.MESH = CN()
 _C.MESH.TEXTURE_ATLAS_SIZE = 50

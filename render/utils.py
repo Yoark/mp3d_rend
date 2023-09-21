@@ -164,3 +164,11 @@ def save_images_to_one(
         print(f"Created {save_dir}")
     # title = "_".join(title)
     plt.savefig(f"{save_dir}/{filename}.png")
+
+def load_jsonl(filename):
+    # *
+    data = []
+    import json
+    with open(filename, 'rb') as f:
+        data = [json.loads(item) for item in f]
+    return data
