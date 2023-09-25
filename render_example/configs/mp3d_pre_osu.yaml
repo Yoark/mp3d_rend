@@ -7,10 +7,11 @@ DATA:
   MATTERPORT_IMAGE_DIR: /nfs/hpc/sw_data/virl-common-datasets/mp3d-data/v1/scans
   RXR:
     VAL_SEEN: /nfs/hpc/sw/zijiao/unitVLN/VLN-HAMT/datasets/RxR/annotations/rxr_val_seen_guide_enc_xlmr.jsonl
+  SCAN_VPS: /nfs/hpc/sw/zijiao/mp3d_rend/p121.json
 TEST: True
 SAVE:
-  IMAGE_DIR: render_example/save/test_rend
+  IMAGE_DIR: render_example/save/val_seen_atlas20
   VAL_UNSEEN_POSE: render_example/save/poses
   VAL_SEEN_POSE: render_example/save/poses
 MESH:
-  TEXTURE_ATLAS_SIZE: 40
+  TEXTURE_ATLAS_SIZE: 20

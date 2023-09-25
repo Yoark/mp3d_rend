@@ -1,4 +1,5 @@
 import json
+import gc
 import os
 from collections import defaultdict
 import h5py
@@ -31,6 +32,26 @@ from render.utils import (
 
 import ipdb
 
+def load_json(filename):
+    # *
+    with open(filename) as f:
+        data = json.load(f)
+    return data
+
+def save_json(filename, data):
+    # *
+    with open(filename, 'w') as f:
+        json.dump(data, f)
+        
+def split_dict(d):
+    keys = list(d.keys())
+    mid_idx = len(keys) // 2
+    
+    dict1 = {k: d[k] for k in keys[:mid_idx]}
+    dict2 = {k: d[k] for k in keys[mid_idx:]}
+    
+    return dict1, dict2
+
 def load_viewpoint_ids(connectivity_dir):
     viewpoint_ids = []
     with open(os.path.join(connectivity_dir, "scans.txt")) as f:
@@ -53,29 +74,32 @@ def main():
     connectivity_dir = configs.DATA.CONNECTIVITY_DIR
     scan_dir = configs.DATA.MESH_DIR
     image_dir = configs.DATA.MATTERPORT_IMAGE_DIR
+
+    # scanvp_list = load_viewpoint_ids(connectivity_dir)
+
+    # val_seen_scan_vps = defaultdict(set)
+    # for scan, vp in scanvp_list:
+    #     val_seen_scan_vps[scan].add(vp)
+    
+    # for k,v in val_seen_scan_vps.items():
+    #     val_seen_scan_vps[k] = list(v)
+
+
     # val_unseen_dir = configs.DATA.RXR.VAL_UNSEEN
 
-    # load rxr_val_unseen_guide.jsonl.gz
-    # rxr_val_unseen = read_gz_jsonlines(val_unseen_dir)
 
-    # scan_vps = set()
-    # for item in rxr_val_unseen:
-    #     scan = item["scan"]
-    #     viewpoints = item["path"]
-    #     scan_vps.update([(scan, vp) for vp in viewpoints])
-    # scan_vps = load_viewpoint_ids(connectivity_dir)
-    # filter the scan_vps to only compute for those seen in val seen
-    val_seen = load_jsonl(configs.DATA.RXR.VAL_SEEN)
-    val_seen_scan_vps = defaultdict(set)
+    # val_seen = load_jsonl(configs.DATA.RXR.VAL_SEEN)
+    # val_seen_scan_vps = defaultdict(set)
     
-    for item in val_seen:
-        for vp in item['path']:
-            val_seen_scan_vps[item['scan']].add(vp)
+    # for item in val_seen:
+    #     for vp in item['path']:
+    #         val_seen_scan_vps[item['scan']].add(vp)
+    
+    # for k, v in val_seen_scan_vps.items():
+    #     val_seen_scan_vps[k] = list(v)
+    val_seen_scan_vps = load_json(configs.DATA.SCAN_VPS)
 
             
-    # ipdb.set_trace()
-    # val_seen_scans = set([item['scan'] for item in val_seen])
-    # scan_vps_filtered = [item for item in scan_vps if item[0] in val_seen_scans]
     
 
     sim = build_simulator(connectivity_dir, image_dir)
@@ -111,14 +135,20 @@ def main():
     pbar = tqdm.tqdm(val_seen_scan_vps.items(), desc="Progress of scans:")
 
     # the render number per round
-    round_num = 3
+    round_num = 1
 
-    def remove_memo(to_remove: list):
-        for memo in to_remove:
-            del memo
+
 
     for scan, vps in pbar:
+        # ipdb.set_trace()
         faces, verts, atlas = get_mesh_data(configs, scan, device)
+
+        # ipdb.set_trace()
+        mesh = create_and_expand_mesh(
+            faces, verts, atlas, device=device, expand_num=round_num
+        )
+        # ipdb.set_trace()
+        # ipdb.set_trace()
         for vp in vps:
             scanvp_path = create_folder(os.path.join(save_folder, scan, vp))
             headings = []
@@ -151,9 +181,9 @@ def main():
                     # renderer, mesh = get_mesh_renderer(configs, scan, expand=round_num)
 
                     # ! this part can be removed oyut of if
-                    mesh = create_and_expand_mesh(
-                        faces, verts, atlas, device=device, expand_num=round_num
-                    )
+                    # mesh = create_and_expand_mesh(
+                    #     faces, verts, atlas, device=device, expand_num=round_num
+                    # )
 
                     # ipdb.set_trace()
                     render_params = get_render_params(
@@ -168,6 +198,7 @@ def main():
                     cameras = render_params["cameras"]
                     # ipdb.set_trace()
                     images = renderer(mesh, cameras=cameras)
+                    # ipdb.set_trace()
                     # save image by scan_vp_ix
 
                     images = images[..., :3].cpu().detach().numpy()
@@ -185,12 +216,17 @@ def main():
                     elevations = []
                     ixs = []
                     # remove the created mesh
-                    remove_memo([mesh, cameras, render_params, images])
+                    # remove_memo([cameras, render_params, images])
+                    del cameras, render_params, images
                     torch.cuda.empty_cache()
+                    # ipdb.set_trace()
                 # feature extractor?
         # remove the data for last mesh
-        remove_memo(faces, verts, atlas)
+        # ipdb.set_trace()
+        del mesh, faces, verts, atlas
         torch.cuda.empty_cache()
+        gc.collect()
+        # ipdb.set_trace()
 
 if __name__ == "__main__":
     from ipdb import launch_ipdb_on_exception

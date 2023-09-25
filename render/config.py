@@ -13,6 +13,7 @@ _C.DATA.MESH_DIR = (
 _C.DATA.MATTERPORT_IMAGE_DIR = "/mnt/sw/data/vln/traj/data/matterport3d/v1/scans"
 _C.DATA.CONNECTIVITY_DIR = "/mnt/sw/data/vln/traj/data/matterport3d/connectivity"
 _C.DATA.RXR_DIR = "/mnt/sw/data/vln/traj/data/RxR/rxr_train_guide.jsonl.gz"
+_C.DATA.SCAN_VPS = ""
 
 _C.DATA.RXR = CN()
 _C.DATA.RXR.TRAIN = "/mnt/sw/data/vln/traj/data/RxR/rxr_train_guide.jsonl.gz"
